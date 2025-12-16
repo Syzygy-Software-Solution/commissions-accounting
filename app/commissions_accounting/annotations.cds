@@ -1,0 +1,1 @@
+using srv.AmortizationService as service from '../../srv/schema-service';

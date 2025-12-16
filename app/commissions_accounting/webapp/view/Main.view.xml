@@ -1,0 +1,174 @@
+<mvc:View controllerName="commissionsaccounting.controller.Main"
+    xmlns:mvc="sap.ui.core.mvc"
+    xmlns="sap.m"
+    xmlns:uxap="sap.uxap"
+    xmlns:unified="sap.ui.unified"
+    xmlns:layout="sap.ui.layout"
+    xmlns:core="sap.ui.core"
+    xmlns:form="sap.ui.layout.form">
+    
+
+    <!-- Test demo -->
+    <uxap:ObjectPageLayout id="objectPageLayout" useIconTabBar="true">
+        <uxap:headerTitle>
+            <uxap:ObjectPageDynamicHeaderTitle>
+                <uxap:expandedHeading>
+                    <HBox alignItems="Center">
+                        <core:Icon src="sap-icon://money-bills" size="2rem" color="#0854A0" class="sapUiTinyMarginEnd" />
+                        <Title text="ASC606 - Amortization Details" />
+                    </HBox>
+                </uxap:expandedHeading>
+                <uxap:snappedHeading>
+                    <HBox alignItems="Center">
+                        <core:Icon src="sap-icon://money-bills" size="1.5rem" color="#0854A0" class="sapUiTinyMarginEnd" />
+                        <Title text="ASC606 - Amortization Details" />
+                    </HBox>
+                </uxap:snappedHeading>
+                <uxap:actions>
+                    <!-- <Button text="Upload" icon="sap-icon://upload" press=".onUploadPress" type="Transparent" /> -->
+                    <Button text="Download Template" icon="sap-icon://download" press=".onDownloadTemplatePress" />
+                </uxap:actions>
+            </uxap:ObjectPageDynamicHeaderTitle>
+        </uxap:headerTitle>
+
+        <uxap:sections>
+            <uxap:ObjectPageSection title="Amortization Schedule" titleUppercase="false">
+                <uxap:subSections>
+                    <uxap:ObjectPageSubSection>
+                        <VBox>
+                            <Toolbar visible="{= ${/schedule}.length > 0 }">
+                                <ToolbarSpacer />
+                                <Button icon="sap-icon://filter" press=".onFilterPress" type="Emphasized"></Button>
+                                <Button 
+                                    text="Download Schedule" 
+                                    icon="sap-icon://excel-attachment" 
+                                    press=".onDownloadSchedulePress"
+                                    type="Neutral" />
+                                <Text text="Total Records: {= ${/schedule}.length }" class="sapUiSmallMarginEnd" />
+                            </Toolbar>
+                            <Table id="scheduleTable" items="{/schedule}" noDataText=" " alternateRowColors="true">
+                                <columns>
+                                    <Column><Text text="PayeeId" /></Column>
+                                    <Column><Text text="Product" /></Column>
+                                    <Column><Text text="Total Incentive" /></Column>
+                                    <Column><Text text="Cap %" /></Column>
+                                    <Column><Text text="Term" /></Column>
+                                    <Column><Text text="Payment Frequency" /></Column>
+                                    <Column><Text text="Payment Start Date" /></Column>
+                                    <Column><Text text="Plan" /></Column>
+                                    <Column><Text text="Data Type" /></Column>
+                                    <Column><Text text="Data Type Name" /></Column>
+                                    <Column><Text text="Account Type" /></Column>
+                                    <Column><Text text="Payroll Classification" /></Column>
+                                    <Column><Text text="Expense Start Date" /></Column>
+                                    <Column><Text text="Expense End Date" /></Column>
+                                    <Column><Text text="Notes" /></Column>
+                                </columns>
+                                <items>
+                                    <ColumnListItem>
+                                        <cells>
+                                            <Text text="{PayeeId}" />
+                                            <Text text="{Product}" />
+                                            <Text text="{Total Incentive}" />
+                                            <Text text="{Cap %}" />
+                                            <Text text="{Term}" />
+                                            <Text text="{Payment Frequency}" />
+                                            <Text text="{Payment Start Date}" />
+                                            <Text text="{Plan}" />
+                                            <Text text="{Data Type}" />
+                                            <Text text="{Data Type Name}" />
+                                            <Text text="{Account Type}" />
+                                            <Text text="{Payroll Classification}" />
+                                            <Text text="{Expense Start Date}" />
+                                            <Text text="{Expense End Date}" />
+                                            <Text text="{Notes}" />
+                                        </cells>
+                                    </ColumnListItem>
+                                </items>
+                            </Table>
+                            <IllustratedMessage
+                                visible="{= ${/schedule}.length === 0 }"
+                                illustrationType="sapIllus-EmptyCalendar"
+                                title="No Schedule Generated"
+                                description="Amortization schedule will be generated after uploading commission data"
+                                illustrationSize="Auto" >
+                            </IllustratedMessage>
+                        </VBox>
+                    </uxap:ObjectPageSubSection>
+
+                    <uxap:ObjectPageSubSection title="Edit Schedule"></uxap:ObjectPageSubSection>
+                </uxap:subSections>
+            </uxap:ObjectPageSection>
+
+            <uxap:ObjectPageSection title="Overview" titleUppercase="false">
+                <uxap:subSections>
+                    <uxap:ObjectPageSubSection>
+                        <VBox>
+                            <Toolbar visible="{= ${/overview}.length > 0 }">
+                                <ToolbarSpacer />
+                                <Text text="Total Records: {= ${/overview}.length }" class="sapUiSmallMarginEnd" />
+                            </Toolbar>
+                            <Table id="overviewTable" items="{/overview}" noDataText=" " alternateRowColors="true">
+                                <columns>
+                                    <Column><Text text="PayeeId" /></Column>
+                                    <Column><Text text="Product" /></Column>
+                                    <Column><Text text="Total Incentive" /></Column>
+                                    <Column><Text text="Cap %" /></Column>
+                                    <Column><Text text="Term" /></Column>
+                                    <Column><Text text="Payment Frequency" /></Column>
+                                    <Column><Text text="Payment Start Date" /></Column>
+                                    <Column><Text text="Plan" /></Column>
+                                    <Column><Text text="Data Type" /></Column>
+                                    <Column><Text text="Data Type Name" /></Column>
+                                    <Column><Text text="Account Type" /></Column>
+                                    <Column><Text text="Payroll Classification" /></Column>
+                                    <Column><Text text="Expense Start Date" /></Column>
+                                    <Column><Text text="Expense End Date" /></Column>
+                                    <Column><Text text="Notes" /></Column>
+                                </columns>
+                                <items>
+                                    <ColumnListItem>
+                                        <cells>
+                                            <Text text="{PayeeId}" />
+                                            <Text text="{Product}" />
+                                            <Text text="{Total Incentive}" />
+                                            <Text text="{Cap %}" />
+                                            <Text text="{Term}" />
+                                            <Text text="{Payment Frequency}" />
+                                            <Text text="{Payment Start Date}" />
+                                            <Text text="{Plan}" />
+                                            <Text text="{Data Type}" />
+                                            <Text text="{Data Type Name}" />
+                                            <Text text="{Account Type}" />
+                                            <Text text="{Payroll Classification}" />
+                                            <Text text="{Expense Start Date}" />
+                                            <Text text="{Expense End Date}" />
+                                            <Text text="{Notes}" />
+                                        </cells>
+                                    </ColumnListItem>
+                                </items>
+                            </Table>
+                            <IllustratedMessage
+                                visible="{= ${/overview}.length === 0 }"
+                                illustrationType="sapIllus-EmptyList"
+                                title="No Data Available"
+                                description="Upload an Excel file to view commission data"
+                                illustrationSize="Auto">
+                            </IllustratedMessage>
+                        </VBox>
+                    </uxap:ObjectPageSubSection>
+                </uxap:subSections>
+            </uxap:ObjectPageSection>
+
+            <uxap:ObjectPageSection title="Setup" titleUppercase="false">
+                <uxap:subSections>
+                    <uxap:ObjectPageSubSection>
+                        <VBox class="sapUiSmallMargin">
+                            <core:Fragment fragmentName="commissionsaccounting.view.fragments.SetupForm" type="XML" />  
+                        </VBox>
+                    </uxap:ObjectPageSubSection>
+                </uxap:subSections>
+            </uxap:ObjectPageSection>
+        </uxap:sections>
+    </uxap:ObjectPageLayout>
+</mvc:View>
