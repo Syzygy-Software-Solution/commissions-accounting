@@ -1,0 +1,48 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run commissions-accounting-1",
+      "request": "launch",
+      "type": "node",
+      "cwd": "${workspaceFolder}",
+      "runtimeExecutable": "cds",
+      "args": [
+        "serve",
+        "--in-memory?"
+      ],
+      "console": "internalConsole",
+      "internalConsoleOptions": "openOnSessionStart",
+      "skipFiles": [
+        "<node_internals>/**"
+      ],
+      "envFile": "${workspaceFolder}/.env1",
+      "env": {
+        "NODE_ENV": "development",
+        "run.config": "{\"handlerId\":\"cap_run_config_handler_id\",\"runnableId\":\"{\\\"projectPath\\\":\\\"/home/user/projects/commissions-accounting\\\",\\\"profileName\\\":\\\"development\\\"}\"}"
+      }
+    },
+    {
+      "name": "Run commissions-accounting-1",
+      "runtimeExecutable": "cds",
+      "request": "launch",
+      "killBehavior": "polite",
+      "args": [
+        "watch",
+        "--open",
+        "http://localhost:5000"
+      ],
+      "console": "internalConsole",
+      "internalConsoleOptions": "openOnSessionStart",
+      "type": "pwa-node",
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "PreLaunchTask for Run commissions-accounting-1",
+      "envFile": "${workspaceFolder}/env/.env1",
+      "env": {
+        "run.config": "{\"handlerId\":\"lcap_run_config_handler_id\",\"runnableId\":\"{\\\"projectPath\\\":\\\"/home/user/projects/commissions-accounting\\\",\\\"profileName\\\":\\\"\\\"}\"}",
+        "runConfigurations": "{\"dbBinding\":{\"type\":\"SAP HANA Cloud\",\"dbName\":\"commissions_accounting-db\"},\"authBinding\":{\"authType\":\"XSUAA\"}}"
+      },
+      "postDebugTask": "stop-app-router"
+    }
+  ]
+}

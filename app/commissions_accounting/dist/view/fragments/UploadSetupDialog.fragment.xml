@@ -1,0 +1,30 @@
+<core:FragmentDefinition
+    xmlns="sap.m"
+    xmlns:core="sap.ui.core"
+    xmlns:upload="sap.ui.unified">
+    <Dialog
+        id="uploadSetupDialog"
+        title="Upload Setup Data"
+        contentWidth="500px">
+        <content>
+            <VBox class="sapUiSmallMargin">
+                <Label text="Select Excel File" required="true" />
+                <upload:FileUploader
+                    id="setupFileUploader"
+                    name="setupFile"
+                    uploadUrl="upload"
+                    placeholder="Choose a file..."
+                    change=".onSetupFileSelect"
+                    fileType="xlsx,xls"
+                    width="100%" />
+                <Text class="sapUiTinyMarginTop" text="Upload the Setup Template with your setup data" />
+            </VBox>
+        </content>
+        <beginButton>
+            <Button text="Upload" press=".onUploadSetupFile" type="Emphasized" />
+        </beginButton>
+        <endButton>
+            <Button text="Cancel" press=".onCloseUploadSetupDialog" />
+        </endButton>
+    </Dialog>
+</core:FragmentDefinition>

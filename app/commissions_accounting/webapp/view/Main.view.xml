@@ -25,40 +25,58 @@
                     </HBox>
                 </uxap:snappedHeading>
                 <uxap:actions>
-                    <!-- <Button text="Upload" icon="sap-icon://upload" press=".onUploadPress" type="Transparent" /> -->
-                    <Button text="Download Template" icon="sap-icon://download" press=".onDownloadTemplatePress" />
+                    <Button text="Execute Amortization" icon="" press=".onExecuteAmortizationPress" />
                 </uxap:actions>
             </uxap:ObjectPageDynamicHeaderTitle>
         </uxap:headerTitle>
 
         <uxap:sections>
+            <uxap:ObjectPageSection title="Setup" titleUppercase="false">
+                <uxap:subSections>
+                    <uxap:ObjectPageSubSection>
+                        <VBox class="sapUiSmallMargin">
+                            <core:Fragment fragmentName="commissionsaccounting.view.fragments.CurrentSetups" type="XML" />  
+                        </VBox>
+                    </uxap:ObjectPageSubSection>
+                </uxap:subSections>
+            </uxap:ObjectPageSection>
+            
             <uxap:ObjectPageSection title="Amortization Schedule" titleUppercase="false">
                 <uxap:subSections>
                     <uxap:ObjectPageSubSection>
                         <VBox>
-                            <Toolbar visible="{= ${/schedule}.length > 0 }">
+                            <Toolbar visible="{= ${scheduleData>/}.length > 0 }">
+                                <Label text="Filter by Payee ID:" class="sapUiTinyMarginEnd"/>
+                                <MultiComboBox
+                                    id="schedulePayeeFilter"
+                                    width="250px"
+                                    items="{/schedulePayeeIds}"
+                                    selectionChange=".onSchedulePayeeFilterChange"
+                                    placeholder="Select Payee IDs">
+                                    <core:Item key="{id}" text="{id}" />
+                                </MultiComboBox>
                                 <ToolbarSpacer />
-                                <Button icon="sap-icon://filter" press=".onFilterPress" type="Emphasized"></Button>
                                 <Button 
                                     text="Download Schedule" 
                                     icon="sap-icon://excel-attachment" 
                                     press=".onDownloadSchedulePress"
-                                    type="Neutral" />
-                                <Text text="Total Records: {= ${/schedule}.length }" class="sapUiSmallMarginEnd" />
+                                    type="Ghost" />
+                                <Text text="Total Records: {= ${scheduleData>/}.length }" class="sapUiSmallMarginEnd" />
                             </Toolbar>
-                            <Table id="scheduleTable" items="{/schedule}" noDataText=" " alternateRowColors="true">
+                            <Table id="scheduleTable" items="{scheduleData>/}" noDataText=" " alternateRowColors="false">
                                 <columns>
                                     <Column><Text text="PayeeId" /></Column>
+                                    <Column><Text text="OrderId" /></Column>
                                     <Column><Text text="Product" /></Column>
                                     <Column><Text text="Total Incentive" /></Column>
                                     <Column><Text text="Cap %" /></Column>
                                     <Column><Text text="Term" /></Column>
                                     <Column><Text text="Payment Frequency" /></Column>
                                     <Column><Text text="Payment Start Date" /></Column>
-                                    <Column><Text text="Plan" /></Column>
+                                    <!-- <Column><Text text="Plan" /></Column>
                                     <Column><Text text="Data Type" /></Column>
                                     <Column><Text text="Data Type Name" /></Column>
-                                    <Column><Text text="Account Type" /></Column>
+                                    <Column><Text text="Account Type" /></Column> -->
                                     <Column><Text text="Payroll Classification" /></Column>
                                     <Column><Text text="Expense Start Date" /></Column>
                                     <Column><Text text="Expense End Date" /></Column>
@@ -67,31 +85,35 @@
                                 <items>
                                     <ColumnListItem>
                                         <cells>
-                                            <Text text="{PayeeId}" />
-                                            <Text text="{Product}" />
-                                            <Text text="{Total Incentive}" />
-                                            <Text text="{Cap %}" />
-                                            <Text text="{Term}" />
-                                            <Text text="{Payment Frequency}" />
-                                            <Text text="{Payment Start Date}" />
-                                            <Text text="{Plan}" />
-                                            <Text text="{Data Type}" />
-                                            <Text text="{Data Type Name}" />
-                                            <Text text="{Account Type}" />
-                                            <Text text="{Payroll Classification}" />
-                                            <Text text="{Expense Start Date}" />
-                                            <Text text="{Expense End Date}" />
-                                            <Text text="{Notes}" />
+                                            <Text text="{scheduleData>PayeeId}" />
+                                            <Text text="{scheduleData>OrderId}" />
+                                            <Text text="{scheduleData>Product}" />
+                                            <Text text="{scheduleData>Total Incentive}" />
+                                            <Text text="{scheduleData>Cap %}" />
+                                            <Text text="{scheduleData>Term}" />
+                                            <Text text="{scheduleData>Payment Frequency}" />
+                                            <Text text="{scheduleData>Payment Start Date}" />
+                                            <!-- <Text text="{scheduleData>Plan}" />
+                                            <Text text="{scheduleData>Data Type}" />
+                                            <Text text="{scheduleData>Data Type Name}" />
+                                            <Text text="{scheduleData>Account Type}" /> -->
+                                            <Text text="{scheduleData>Payroll Classification}" />
+                                            <Text text="{scheduleData>Expense Start Date}" />
+                                            <Text text="{scheduleData>Expense End Date}" />
+                                            <Text text="{scheduleData>Notes}" />
                                         </cells>
                                     </ColumnListItem>
                                 </items>
                             </Table>
                             <IllustratedMessage
-                                visible="{= ${/schedule}.length === 0 }"
+                                visible="{= ${scheduleData>/}.length === 0 }"
                                 illustrationType="sapIllus-EmptyCalendar"
                                 title="No Schedule Generated"
                                 description="Amortization schedule will be generated after uploading commission data"
                                 illustrationSize="Auto" >
+                                <additionalContent>
+                                    <Button text="Execute Amortization" press=".onExecuteAmortizationPress"></Button>
+                                </additionalContent>
                             </IllustratedMessage>
                         </VBox>
                     </uxap:ObjectPageSubSection>
@@ -104,11 +126,11 @@
                 <uxap:subSections>
                     <uxap:ObjectPageSubSection>
                         <VBox>
-                            <Toolbar visible="{= ${/overview}.length > 0 }">
+                            <Toolbar visible="{= ${overviewData>/}.length > 0 }">
                                 <ToolbarSpacer />
-                                <Text text="Total Records: {= ${/overview}.length }" class="sapUiSmallMarginEnd" />
+                                <Text text="Total Records: {= ${overviewData>/}.length }" class="sapUiSmallMarginEnd" />
                             </Toolbar>
-                            <Table id="overviewTable" items="{/overview}" noDataText=" " alternateRowColors="true">
+                            <Table id="overviewTable" items="{overviewData>/}" noDataText=" " alternateRowColors="false">
                                 <columns>
                                     <Column><Text text="PayeeId" /></Column>
                                     <Column><Text text="Product" /></Column>
@@ -117,58 +139,53 @@
                                     <Column><Text text="Term" /></Column>
                                     <Column><Text text="Payment Frequency" /></Column>
                                     <Column><Text text="Payment Start Date" /></Column>
-                                    <Column><Text text="Plan" /></Column>
+                                    <!-- <Column><Text text="Plan" /></Column>
                                     <Column><Text text="Data Type" /></Column>
                                     <Column><Text text="Data Type Name" /></Column>
-                                    <Column><Text text="Account Type" /></Column>
+                                    <Column><Text text="Account Type" /></Column> -->
                                     <Column><Text text="Payroll Classification" /></Column>
                                     <Column><Text text="Expense Start Date" /></Column>
                                     <Column><Text text="Expense End Date" /></Column>
-                                    <Column><Text text="Notes" /></Column>
+                                    <!-- <Column><Text text="Notes" /></Column> -->
                                 </columns>
                                 <items>
                                     <ColumnListItem>
                                         <cells>
-                                            <Text text="{PayeeId}" />
-                                            <Text text="{Product}" />
-                                            <Text text="{Total Incentive}" />
-                                            <Text text="{Cap %}" />
-                                            <Text text="{Term}" />
-                                            <Text text="{Payment Frequency}" />
-                                            <Text text="{Payment Start Date}" />
-                                            <Text text="{Plan}" />
-                                            <Text text="{Data Type}" />
-                                            <Text text="{Data Type Name}" />
-                                            <Text text="{Account Type}" />
-                                            <Text text="{Payroll Classification}" />
-                                            <Text text="{Expense Start Date}" />
-                                            <Text text="{Expense End Date}" />
-                                            <Text text="{Notes}" />
+                                            <Text text="{overviewData>PayeeId}" />
+                                            <Text text="{overviewData>Product}" />
+                                            <Text text="{overviewData>Total Incentive}" />
+                                            <Text text="{overviewData>Cap %}" />
+                                            <Text text="{overviewData>Term}" />
+                                            <Text text="{overviewData>Payment Frequency}" />
+                                            <Text text="{overviewData>Payment Start Date}" />
+                                            <!-- <Text text="{overviewData>Plan}" />
+                                            <Text text="{overviewData>Data Type}" />
+                                            <Text text="{overviewData>Data Type Name}" />
+                                            <Text text="{overviewData>Account Type}" /> -->
+                                            <Text text="{overviewData>Payroll Classification}" />
+                                            <Text text="{overviewData>Expense Start Date}" />
+                                            <Text text="{overviewData>Expense End Date}" />
+                                            <!-- <Text text="{overviewData>Notes}" /> -->
                                         </cells>
                                     </ColumnListItem>
                                 </items>
                             </Table>
                             <IllustratedMessage
-                                visible="{= ${/overview}.length === 0 }"
+                                visible="{= ${overviewData>/}.length === 0 }"
                                 illustrationType="sapIllus-EmptyList"
                                 title="No Data Available"
                                 description="Upload an Excel file to view commission data"
                                 illustrationSize="Auto">
+                                <additionalContent>
+                                    <Button text="Execute Amortization" press=".onExecuteAmortizationPress"></Button>
+                                </additionalContent>
                             </IllustratedMessage>
                         </VBox>
                     </uxap:ObjectPageSubSection>
                 </uxap:subSections>
             </uxap:ObjectPageSection>
 
-            <uxap:ObjectPageSection title="Setup" titleUppercase="false">
-                <uxap:subSections>
-                    <uxap:ObjectPageSubSection>
-                        <VBox class="sapUiSmallMargin">
-                            <core:Fragment fragmentName="commissionsaccounting.view.fragments.SetupForm" type="XML" />  
-                        </VBox>
-                    </uxap:ObjectPageSubSection>
-                </uxap:subSections>
-            </uxap:ObjectPageSection>
+            
         </uxap:sections>
     </uxap:ObjectPageLayout>
 </mvc:View>
