@@ -1,0 +1,33 @@
+<core:FragmentDefinition
+    xmlns="sap.m"
+    xmlns:core="sap.ui.core"
+    xmlns:unified="sap.ui.unified">
+    <Dialog
+        title="Upload Amortization Data"
+        contentWidth="500px"
+        contentHeight="200px">
+        <content>
+            <VBox class="sapUiSmallMargin">
+                <Label text="Select Amortization Data File (.xlsx or .xls):" class="sapUiTinyMarginBottom" />
+                <unified:FileUploader
+                    id="amortizationFileUploader"
+                    width="100%"
+                    fileType="xlsx,xls"
+                    change=".onAmortizationFileSelect"
+                    placeholder="Choose a file..." />
+                <Text text="Note: Please upload the Amortization Template with your data filled in." class="sapUiTinyMarginTop" />
+            </VBox>
+        </content>
+        <beginButton>
+            <Button
+                text="Upload"
+                type="Emphasized"
+                press=".onUploadAmortizationFile" />
+        </beginButton>
+        <endButton>
+            <Button
+                text="Cancel"
+                press=".onCloseUploadAmortizationDialog" />
+        </endButton>
+    </Dialog>
+</core:FragmentDefinition>

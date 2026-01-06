@@ -28,6 +28,13 @@
 					"annotations": [],
 					"odataVersion": "4.0"
 				}
+			},
+			"tcmp": {
+				"uri": "tcmp/api/v1/datasphere/consumption/relational/SYZYGYDEV",
+				"type": "OData",
+				"settings": {
+					"odataVersion": "4.0"
+				}
 			}
 		},
 		"crossNavigation": {

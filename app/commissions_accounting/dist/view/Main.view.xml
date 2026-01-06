@@ -25,13 +25,23 @@
                     </HBox>
                 </uxap:snappedHeading>
                 <uxap:actions>
-                    <Button text="Execute Amortization" icon="" press=".onExecuteAmortizationPress" />
+                    <ComboBox
+                        id="periodsComboBox"
+                        showSecondaryValues="true"
+                        items="{periodsData>/}"
+                        placeholder="Select Period"
+                        width="200px">
+                        <core:ListItem key="{periodsData>NAME}" text="{periodsData>NAME}" additionalText="{periodsData>PERIOD_RANGE}" />
+                    </ComboBox>
+                    <Button text="Execute Amortization" type="Success" icon="sap-icon://play" press=".onExecuteAmortizationPress" />
+                    <Button type="Ghost" icon="sap-icon://download" visible="false" text="Download Amortization Template" press=".onDownloadAmortizationTemplatePress"></Button>
+                    <Button type="Ghost" icon="sap-icon://upload" visible="false" text="Upload Amortization Data" press=".onUploadAmortizationDataPress"></Button>
                 </uxap:actions>
             </uxap:ObjectPageDynamicHeaderTitle>
         </uxap:headerTitle>
 
         <uxap:sections>
-            <uxap:ObjectPageSection title="Setup" titleUppercase="false">
+            <uxap:ObjectPageSection  title="Setup" titleUppercase="false">
                 <uxap:subSections>
                     <uxap:ObjectPageSubSection>
                         <VBox class="sapUiSmallMargin">
@@ -46,16 +56,40 @@
                     <uxap:ObjectPageSubSection>
                         <VBox>
                             <Toolbar visible="{= ${scheduleData>/}.length > 0 }">
-                                <Label text="Filter by Payee ID:" class="sapUiTinyMarginEnd"/>
+                                <Label text="Filters:" class="sapUiTinyMarginEnd"/>
                                 <MultiComboBox
                                     id="schedulePayeeFilter"
-                                    width="250px"
+                                    width="200px"
                                     items="{/schedulePayeeIds}"
                                     selectionChange=".onSchedulePayeeFilterChange"
-                                    placeholder="Select Payee IDs">
+                                    placeholder="Payee ID">
+                                    <core:Item key="{id}" text="{id}" />
+                                </MultiComboBox>
+                                <MultiComboBox
+                                    id="scheduleProductFilter"
+                                    width="200px"
+                                    items="{/scheduleProducts}"
+                                    selectionChange=".onScheduleProductFilterChange"
+                                    placeholder="Product"
+                                    class="sapUiTinyMarginBegin">
+                                    <core:Item key="{id}" text="{id}" />
+                                </MultiComboBox>
+                                <MultiComboBox
+                                    id="schedulePayrollClassificationFilter"
+                                    width="200px"
+                                    items="{/schedulePayrollClassifications}"
+                                    selectionChange=".onSchedulePayrollClassificationFilterChange"
+                                    placeholder="Payroll Classification"
+                                    class="sapUiTinyMarginBegin">
                                     <core:Item key="{id}" text="{id}" />
                                 </MultiComboBox>
                                 <ToolbarSpacer />
+                                <Button 
+                                    text="Refresh"
+                                    icon="sap-icon://refresh"
+                                    press=".onRefreshSchedule"
+                                    type="Ghost"
+                                    tooltip="Recalculate with latest setup data" />
                                 <Button 
                                     text="Download Schedule" 
                                     icon="sap-icon://excel-attachment" 
@@ -68,7 +102,7 @@
                                     <Column><Text text="PayeeId" /></Column>
                                     <Column><Text text="OrderId" /></Column>
                                     <Column><Text text="Product" /></Column>
-                                    <Column><Text text="Total Incentive" /></Column>
+                                    <Column><Text text="Amount" /></Column>
                                     <Column><Text text="Cap %" /></Column>
                                     <Column><Text text="Term" /></Column>
                                     <Column><Text text="Payment Frequency" /></Column>
@@ -112,7 +146,9 @@
                                 description="Amortization schedule will be generated after uploading commission data"
                                 illustrationSize="Auto" >
                                 <additionalContent>
-                                    <Button text="Execute Amortization" press=".onExecuteAmortizationPress"></Button>
+                                    <Button type="Success" visible="false" icon="sap-icon://play" text="Execute Amortization" press=".onExecuteAmortizationPress"></Button>
+                                    <Button class="sapUiTinyMarginBegin" visible="false" type="Ghost" icon="sap-icon://download" text="Download Amortization Template" press=".onDownloadAmortizationTemplatePress"></Button>
+                                    <Button class="sapUiTinyMarginBegin" visible="false" type="Ghost" icon="sap-icon://upload" text="Upload Amortization Data" press=".onUploadAmortizationDataPress"></Button>
                                 </additionalContent>
                             </IllustratedMessage>
                         </VBox>
@@ -127,7 +163,40 @@
                     <uxap:ObjectPageSubSection>
                         <VBox>
                             <Toolbar visible="{= ${overviewData>/}.length > 0 }">
+                                <Label text="Filters:" class="sapUiTinyMarginEnd"/>
+                                <MultiComboBox
+                                    id="overviewPayeeFilter"
+                                    width="200px"
+                                    items="{/overviewPayeeIds}"
+                                    selectionChange=".onOverviewPayeeFilterChange"
+                                    placeholder="Payee ID">
+                                    <core:Item key="{id}" text="{id}" />
+                                </MultiComboBox>
+                                <MultiComboBox
+                                    id="overviewProductFilter"
+                                    width="200px"
+                                    items="{/overviewProducts}"
+                                    selectionChange=".onOverviewProductFilterChange"
+                                    placeholder="Product"
+                                    class="sapUiTinyMarginBegin">
+                                    <core:Item key="{id}" text="{id}" />
+                                </MultiComboBox>
+                                <MultiComboBox
+                                    id="overviewPayrollClassificationFilter"
+                                    width="200px"
+                                    items="{/overviewPayrollClassifications}"
+                                    selectionChange=".onOverviewPayrollClassificationFilterChange"
+                                    placeholder="Payroll Classification"
+                                    class="sapUiTinyMarginBegin">
+                                    <core:Item key="{id}" text="{id}" />
+                                </MultiComboBox>
                                 <ToolbarSpacer />
+                                <Button 
+                                    text="Refresh"
+                                    icon="sap-icon://refresh"
+                                    press=".onRefreshSchedule"
+                                    type="Ghost"
+                                    tooltip="Recalculate with latest setup data" />
                                 <Text text="Total Records: {= ${overviewData>/}.length }" class="sapUiSmallMarginEnd" />
                             </Toolbar>
                             <Table id="overviewTable" items="{overviewData>/}" noDataText=" " alternateRowColors="false">
@@ -144,8 +213,8 @@
                                     <Column><Text text="Data Type Name" /></Column>
                                     <Column><Text text="Account Type" /></Column> -->
                                     <Column><Text text="Payroll Classification" /></Column>
-                                    <Column><Text text="Expense Start Date" /></Column>
-                                    <Column><Text text="Expense End Date" /></Column>
+                                    <!-- <Column><Text text="Expense Start Date" /></Column>
+                                    <Column><Text text="Expense End Date" /></Column> -->
                                     <!-- <Column><Text text="Notes" /></Column> -->
                                 </columns>
                                 <items>
@@ -163,8 +232,8 @@
                                             <Text text="{overviewData>Data Type Name}" />
                                             <Text text="{overviewData>Account Type}" /> -->
                                             <Text text="{overviewData>Payroll Classification}" />
-                                            <Text text="{overviewData>Expense Start Date}" />
-                                            <Text text="{overviewData>Expense End Date}" />
+                                            <!-- <Text text="{overviewData>Expense Start Date}" />
+                                            <Text text="{overviewData>Expense End Date}" /> -->
                                             <!-- <Text text="{overviewData>Notes}" /> -->
                                         </cells>
                                     </ColumnListItem>
@@ -177,7 +246,9 @@
                                 description="Upload an Excel file to view commission data"
                                 illustrationSize="Auto">
                                 <additionalContent>
-                                    <Button text="Execute Amortization" press=".onExecuteAmortizationPress"></Button>
+                                    <Button type="Success" visible="false" icon="sap-icon://play" text="Execute Amortization" press=".onExecuteAmortizationPress"></Button>
+                                    <Button class="sapUiTinyMarginBegin" visible="false"  type="Ghost" icon="sap-icon://download" text="Download Amortization Template" press=".onDownloadAmortizationTemplatePress"></Button>
+                                    <Button class="sapUiTinyMarginBegin" visible="false"  type="Ghost" icon="sap-icon://upload" text="Upload Amortization Data" press=".onUploadAmortizationDataPress"></Button>
                                 </additionalContent>
                             </IllustratedMessage>
                         </VBox>

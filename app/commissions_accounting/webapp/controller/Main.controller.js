@@ -33,7 +33,12 @@ sap.ui.define([
             var oOverviewModel = new JSONModel([]);
             this.getView().setModel(oOverviewModel, "overviewData");
 
+            var oPeriodsModel = new JSONModel([]);
+            this.getView().setModel(oPeriodsModel, "periodsData");
+
             await this.getCurrentSetups();
+
+            await this.getAllPeriods();
             
             // Load SheetJS library asynchronously
             this._loadSheetJS();
@@ -376,6 +381,52 @@ sap.ui.define([
             }
         },
 
+        async onDownloadAmortizationTemplatePress() {
+            // Check if XLSX library is loaded
+            if (!window.XLSX) {
+                MessageBox.error("Excel processing library is still loading. Please try again in a moment.");
+                return;
+            }
+
+            BusyIndicator.show(0);
+
+            try {
+                // Create template data with columns from hardcoded aPayeeData
+                const aTemplateData = [
+                    {
+                        "payeeId": "",
+                        "orderId": "",
+                        "product": "",
+                        "totalIncentive": ""
+                    }
+                ];
+
+                // Create worksheet
+                const ws = XLSX.utils.json_to_sheet(aTemplateData);
+
+                // Set column widths
+                ws['!cols'] = [
+                    { wch: 15 },  // payeeId
+                    { wch: 15 },  // orderId
+                    { wch: 15 },  // product
+                    { wch: 20 }   // totalIncentive
+                ];
+
+                // Create workbook
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Amortization Template");
+
+                // Generate file
+                XLSX.writeFile(wb, "Amortization_Template.xlsx");
+
+                MessageToast.show("Amortization template downloaded successfully");
+            } catch (error) {
+                MessageBox.error("Error generating template: " + error.message);
+            } finally {
+                BusyIndicator.hide();
+            }
+        },
+
         onDownloadSchedulePress() {
             // Check if XLSX library is loaded
             if (!window.XLSX) {
@@ -508,24 +559,426 @@ sap.ui.define([
                 
                 const oModel = this.getView().getModel();
                 oModel.setProperty("/scheduleOriginal", null);
+                oModel.setProperty("/overviewOriginal", null);
                 oModel.setProperty("/isFiltered", false);
                 oModel.setProperty("/currentFilter", null);
 
-                // Extract distinct Payee IDs for filter
+                // Extract distinct values for schedule filters
                 const aDistinctPayeeIds = [...new Set(aSchedule.map(item => item.PayeeId))].filter(Boolean);
                 const aPayeeIdOptions = aDistinctPayeeIds.map(id => ({ id: id }));
                 oModel.setProperty("/schedulePayeeIds", aPayeeIdOptions);
 
-                // Clear the multi combo box selection
-                const oMultiCombo = this.byId("schedulePayeeFilter");
-                if (oMultiCombo) {
-                    oMultiCombo.setSelectedKeys([]);
+                const aDistinctProducts = [...new Set(aSchedule.map(item => item.Product))].filter(Boolean);
+                const aProductOptions = aDistinctProducts.map(id => ({ id: id }));
+                oModel.setProperty("/scheduleProducts", aProductOptions);
+
+                const aDistinctPayrollClassifications = [...new Set(aSchedule.map(item => item["Payroll Classification"]))].filter(Boolean);
+                const aPayrollClassificationOptions = aDistinctPayrollClassifications.map(id => ({ id: id }));
+                oModel.setProperty("/schedulePayrollClassifications", aPayrollClassificationOptions);
+
+                // Extract distinct values for overview filters
+                const aOverviewDistinctPayeeIds = [...new Set(aOverview.map(item => item.PayeeId))].filter(Boolean);
+                const aOverviewPayeeIdOptions = aOverviewDistinctPayeeIds.map(id => ({ id: id }));
+                oModel.setProperty("/overviewPayeeIds", aOverviewPayeeIdOptions);
+
+                const aOverviewDistinctProducts = [...new Set(aOverview.map(item => item.Product))].filter(Boolean);
+                const aOverviewProductOptions = aOverviewDistinctProducts.map(id => ({ id: id }));
+                oModel.setProperty("/overviewProducts", aOverviewProductOptions);
+
+                const aOverviewDistinctPayrollClassifications = [...new Set(aOverview.map(item => item["Payroll Classification"]))].filter(Boolean);
+                const aOverviewPayrollClassificationOptions = aOverviewDistinctPayrollClassifications.map(id => ({ id: id }));
+                oModel.setProperty("/overviewPayrollClassifications", aOverviewPayrollClassificationOptions);
+
+                // Clear all schedule multi combo box selections
+                const oPayeeFilter = this.byId("schedulePayeeFilter");
+                if (oPayeeFilter) {
+                    oPayeeFilter.setSelectedKeys([]);
+                }
+                const oProductFilter = this.byId("scheduleProductFilter");
+                if (oProductFilter) {
+                    oProductFilter.setSelectedKeys([]);
+                }
+                const oPayrollClassificationFilter = this.byId("schedulePayrollClassificationFilter");
+                if (oPayrollClassificationFilter) {
+                    oPayrollClassificationFilter.setSelectedKeys([]);
+                }
+
+                // Clear all overview multi combo box selections
+                const oOverviewPayeeFilter = this.byId("overviewPayeeFilter");
+                if (oOverviewPayeeFilter) {
+                    oOverviewPayeeFilter.setSelectedKeys([]);
+                }
+                const oOverviewProductFilter = this.byId("overviewProductFilter");
+                if (oOverviewProductFilter) {
+                    oOverviewProductFilter.setSelectedKeys([]);
+                }
+                const oOverviewPayrollClassificationFilter = this.byId("overviewPayrollClassificationFilter");
+                if (oOverviewPayrollClassificationFilter) {
+                    oOverviewPayrollClassificationFilter.setSelectedKeys([]);
                 }
 
                 MessageToast.show(`Amortization executed successfully: ${aSchedule.length} schedule entries and ${aOverview.length} overview records`);
 
             } catch (error) {
                 MessageBox.error("Error executing amortization: " + error.message);
+            } finally {
+                BusyIndicator.hide();
+            }
+        },
+
+        async onUploadAmortizationDataPress() {
+            // Load and open the upload amortization data dialog
+            if (!this._pUploadAmortizationDialog) {
+                this._pUploadAmortizationDialog = Fragment.load({
+                    id: this.getView().getId(),
+                    name: "commissionsaccounting.view.fragments.UploadAmortizationDialog",
+                    controller: this
+                }).then((oDialog) => {
+                    this.getView().addDependent(oDialog);
+                    return oDialog;
+                });
+            }
+            
+            const oDialog = await this._pUploadAmortizationDialog;
+            oDialog.open();
+        },
+
+        onAmortizationFileSelect(oEvent) {
+            // Store the selected amortization file when user selects a file
+            const oFile = oEvent.getParameter("files") && oEvent.getParameter("files")[0];
+            
+            if (oFile) {
+                this._oSelectedAmortizationFile = oFile;
+            } else {
+                this._oSelectedAmortizationFile = null;
+            }
+        },
+
+        async onUploadAmortizationFile() {
+            // Check if file is selected
+            if (!this._oSelectedAmortizationFile) {
+                MessageBox.warning("Please select a file to upload");
+                return;
+            }
+
+            // Validate file type
+            if (!this._oSelectedAmortizationFile.name.match(/\.(xlsx|xls)$/)) {
+                MessageBox.error("Please upload a valid Excel file (.xlsx or .xls)");
+                return;
+            }
+
+            // Check if XLSX library is loaded
+            if (!window.XLSX) {
+                MessageBox.error("Excel processing library is still loading. Please try again in a moment.");
+                return;
+            }
+
+            BusyIndicator.show(0);
+
+            try {
+                // Read and parse the Excel file
+                const arrayBuffer = await this._readFileAsArrayBuffer(this._oSelectedAmortizationFile);
+                const workbook = XLSX.read(new Uint8Array(arrayBuffer), { type: "array" });
+                
+                // Read first sheet
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+
+                if (jsonData.length === 0) {
+                    MessageBox.error("The uploaded file is empty");
+                    BusyIndicator.hide();
+                    return;
+                }
+
+                // Validate required columns
+                const requiredColumns = ["payeeId", "orderId", "product", "totalIncentive"];
+                const firstRow = jsonData[0];
+                const missingColumns = requiredColumns.filter(col => !(col in firstRow));
+
+                if (missingColumns.length > 0) {
+                    MessageBox.error(`Missing required columns: ${missingColumns.join(", ")}`);
+                    BusyIndicator.hide();
+                    return;
+                }
+
+                // Validate data
+                for (let i = 0; i < jsonData.length; i++) {
+                    const row = jsonData[i];
+                    if (!row.payeeId || !row.orderId || !row.product || !row.totalIncentive) {
+                        MessageBox.error(`Row ${i + 2}: All fields are required (payeeId, orderId, product, totalIncentive)`);
+                        BusyIndicator.hide();
+                        return;
+                    }
+                    
+                    // Validate totalIncentive is a number
+                    if (isNaN(parseFloat(row.totalIncentive)) || parseFloat(row.totalIncentive) <= 0) {
+                        MessageBox.error(`Row ${i + 2}: totalIncentive must be a valid positive number`);
+                        BusyIndicator.hide();
+                        return;
+                    }
+                }
+
+                // Close dialog
+                this.onCloseUploadAmortizationDialog();
+
+                MessageToast.show(`Successfully loaded ${jsonData.length} record(s)`);
+
+                // Get setups from database
+                const sUrl = this.getOwnerComponent().getManifestObject().resolveUri(this.getOwnerComponent().getManifestEntry("sap.app").dataSources.mainService.uri);
+                const response = await fetch(`${sUrl}/AmortizationSetups`);
+                const data = await response.json();
+                const aSetups = data.value || [];
+
+                if (aSetups.length === 0) {
+                    MessageBox.warning("No setup configuration found. Please add setup data before executing amortization.");
+                    BusyIndicator.hide();
+                    return;
+                }
+
+                // Prepare payee data from uploaded Excel
+                const aPayeeData = jsonData.map(row => ({
+                    payeeId: row.payeeId,
+                    orderId: row.orderId,
+                    product: row.product,
+                    totalIncentive: parseFloat(row.totalIncentive)
+                }));
+
+                // Calculate amortization schedule
+                const aSchedule = this._executeAmortizationCalculation(aPayeeData, aSetups);
+
+                // Prepare overview data
+                const aOverview = this._prepareOverviewData(aPayeeData, aSetups);
+
+                // Update the schedule model
+                const oScheduleModel = this.getView().getModel("scheduleData");
+                oScheduleModel.setData(aSchedule);
+                
+                // Update the overview model
+                const oOverviewModel = this.getView().getModel("overviewData");
+                oOverviewModel.setData(aOverview);
+                
+                const oModel = this.getView().getModel();
+                oModel.setProperty("/scheduleOriginal", null);
+                oModel.setProperty("/overviewOriginal", null);
+                oModel.setProperty("/isFiltered", false);
+                oModel.setProperty("/currentFilter", null);
+
+                // Extract distinct values for schedule filters
+                const aDistinctPayeeIds = [...new Set(aSchedule.map(item => item.PayeeId))].filter(Boolean);
+                const aPayeeIdOptions = aDistinctPayeeIds.map(id => ({ id: id }));
+                oModel.setProperty("/schedulePayeeIds", aPayeeIdOptions);
+
+                const aDistinctProducts = [...new Set(aSchedule.map(item => item.Product))].filter(Boolean);
+                const aProductOptions = aDistinctProducts.map(id => ({ id: id }));
+                oModel.setProperty("/scheduleProducts", aProductOptions);
+
+                const aDistinctPayrollClassifications = [...new Set(aSchedule.map(item => item["Payroll Classification"]))].filter(Boolean);
+                const aPayrollClassificationOptions = aDistinctPayrollClassifications.map(id => ({ id: id }));
+                oModel.setProperty("/schedulePayrollClassifications", aPayrollClassificationOptions);
+
+                // Extract distinct values for overview filters
+                const aOverviewDistinctPayeeIds = [...new Set(aOverview.map(item => item.PayeeId))].filter(Boolean);
+                const aOverviewPayeeIdOptions = aOverviewDistinctPayeeIds.map(id => ({ id: id }));
+                oModel.setProperty("/overviewPayeeIds", aOverviewPayeeIdOptions);
+
+                const aOverviewDistinctProducts = [...new Set(aOverview.map(item => item.Product))].filter(Boolean);
+                const aOverviewProductOptions = aOverviewDistinctProducts.map(id => ({ id: id }));
+                oModel.setProperty("/overviewProducts", aOverviewProductOptions);
+
+                const aOverviewDistinctPayrollClassifications = [...new Set(aOverview.map(item => item["Payroll Classification"]))].filter(Boolean);
+                const aOverviewPayrollClassificationOptions = aOverviewDistinctPayrollClassifications.map(id => ({ id: id }));
+                oModel.setProperty("/overviewPayrollClassifications", aOverviewPayrollClassificationOptions);
+
+                // Clear all schedule multi combo box selections
+                const oPayeeFilter = this.byId("schedulePayeeFilter");
+                if (oPayeeFilter) {
+                    oPayeeFilter.setSelectedKeys([]);
+                }
+                const oProductFilter = this.byId("scheduleProductFilter");
+                if (oProductFilter) {
+                    oProductFilter.setSelectedKeys([]);
+                }
+                const oPayrollClassificationFilter = this.byId("schedulePayrollClassificationFilter");
+                if (oPayrollClassificationFilter) {
+                    oPayrollClassificationFilter.setSelectedKeys([]);
+                }
+
+                // Clear all overview multi combo box selections
+                const oOverviewPayeeFilter = this.byId("overviewPayeeFilter");
+                if (oOverviewPayeeFilter) {
+                    oOverviewPayeeFilter.setSelectedKeys([]);
+                }
+                const oOverviewProductFilter = this.byId("overviewProductFilter");
+                if (oOverviewProductFilter) {
+                    oOverviewProductFilter.setSelectedKeys([]);
+                }
+                const oOverviewPayrollClassificationFilter = this.byId("overviewPayrollClassificationFilter");
+                if (oOverviewPayrollClassificationFilter) {
+                    oOverviewPayrollClassificationFilter.setSelectedKeys([]);
+                }
+
+                MessageToast.show(`Amortization executed successfully: ${aSchedule.length} schedule entries and ${aOverview.length} overview records`);
+
+            } catch (error) {
+                MessageBox.error("Error parsing Excel file: " + error.message);
+            } finally {
+                BusyIndicator.hide();
+            }
+        },
+
+        onCloseUploadAmortizationDialog() {
+            // Close dialog and clear file selection
+            this._pUploadAmortizationDialog.then((oDialog) => {
+                oDialog.close();
+                // Clear the file uploader
+                const oFileUploader = this.byId("amortizationFileUploader");
+                if (oFileUploader) {
+                    oFileUploader.clear();
+                }
+                this._oSelectedAmortizationFile = null;
+            });
+        },
+
+        async onRefreshSchedule() {
+            const oScheduleModel = this.getView().getModel("scheduleData");
+            const oOverviewModel = this.getView().getModel("overviewData");
+            const oModel = this.getView().getModel();
+
+            // Check if there is existing schedule/overview data
+            const aCurrentSchedule = oScheduleModel.getData();
+            const aCurrentOverview = oOverviewModel.getData();
+
+            if ((!aCurrentSchedule || aCurrentSchedule.length === 0) && 
+                (!aCurrentOverview || aCurrentOverview.length === 0)) {
+                MessageBox.warning("No data to refresh. Please execute amortization or upload data first.");
+                return;
+            }
+
+            BusyIndicator.show(0);
+
+            try {
+                // Get the latest setup data from database
+                const sUrl = this.getOwnerComponent().getManifestObject().resolveUri(this.getOwnerComponent().getManifestEntry("sap.app").dataSources.mainService.uri);
+                const response = await fetch(`${sUrl}/AmortizationSetups`);
+                const data = await response.json();
+                const aSetups = data.value || [];
+
+                if (aSetups.length === 0) {
+                    MessageBox.warning("No setup configuration found. Please add setup data before refreshing.");
+                    BusyIndicator.hide();
+                    return;
+                }
+
+                // Extract payee data from current overview (which contains the original source data)
+                let aPayeeData = [];
+                
+                if (aCurrentOverview && aCurrentOverview.length > 0) {
+                    // Build payee data from overview which has all the source information
+                    aPayeeData = aCurrentOverview.map(item => ({
+                        payeeId: item.PayeeId,
+                        orderId: item.OrderId || "",
+                        product: item.Product,
+                        totalIncentive: parseFloat(item["Total Incentive"]) || 0
+                    }));
+                } else if (aCurrentSchedule && aCurrentSchedule.length > 0) {
+                    // Fallback: Extract unique payee records from schedule
+                    const payeeMap = new Map();
+                    aCurrentSchedule.forEach(item => {
+                        const key = `${item.PayeeId}-${item.OrderId}-${item.Product}`;
+                        if (!payeeMap.has(key)) {
+                            payeeMap.set(key, {
+                                payeeId: item.PayeeId,
+                                orderId: item.OrderId || "",
+                                product: item.Product,
+                                totalIncentive: parseFloat(item["Total Incentive"]) || 0
+                            });
+                        }
+                    });
+                    aPayeeData = Array.from(payeeMap.values());
+                }
+
+                if (aPayeeData.length === 0) {
+                    MessageBox.warning("Unable to extract payee data for refresh. Please re-execute amortization.");
+                    BusyIndicator.hide();
+                    return;
+                }
+
+                // Recalculate amortization schedule with latest setup data
+                const aSchedule = this._executeAmortizationCalculation(aPayeeData, aSetups);
+
+                // Prepare overview data
+                const aOverview = this._prepareOverviewData(aPayeeData, aSetups);
+
+                // Update the schedule model
+                oScheduleModel.setData(aSchedule);
+                
+                // Update the overview model
+                oOverviewModel.setData(aOverview);
+                
+                // Reset filter state
+                oModel.setProperty("/scheduleOriginal", null);
+                oModel.setProperty("/overviewOriginal", null);
+                oModel.setProperty("/isFiltered", false);
+                oModel.setProperty("/currentFilter", null);
+
+                // Extract distinct values for schedule filters
+                const aDistinctPayeeIds = [...new Set(aSchedule.map(item => item.PayeeId))].filter(Boolean);
+                const aPayeeIdOptions = aDistinctPayeeIds.map(id => ({ id: id }));
+                oModel.setProperty("/schedulePayeeIds", aPayeeIdOptions);
+
+                const aDistinctProducts = [...new Set(aSchedule.map(item => item.Product))].filter(Boolean);
+                const aProductOptions = aDistinctProducts.map(id => ({ id: id }));
+                oModel.setProperty("/scheduleProducts", aProductOptions);
+
+                const aDistinctPayrollClassifications = [...new Set(aSchedule.map(item => item["Payroll Classification"]))].filter(Boolean);
+                const aPayrollClassificationOptions = aDistinctPayrollClassifications.map(id => ({ id: id }));
+                oModel.setProperty("/schedulePayrollClassifications", aPayrollClassificationOptions);
+
+                // Extract distinct values for overview filters
+                const aOverviewDistinctPayeeIds = [...new Set(aOverview.map(item => item.PayeeId))].filter(Boolean);
+                const aOverviewPayeeIdOptions = aOverviewDistinctPayeeIds.map(id => ({ id: id }));
+                oModel.setProperty("/overviewPayeeIds", aOverviewPayeeIdOptions);
+
+                const aOverviewDistinctProducts = [...new Set(aOverview.map(item => item.Product))].filter(Boolean);
+                const aOverviewProductOptions = aOverviewDistinctProducts.map(id => ({ id: id }));
+                oModel.setProperty("/overviewProducts", aOverviewProductOptions);
+
+                const aOverviewDistinctPayrollClassifications = [...new Set(aOverview.map(item => item["Payroll Classification"]))].filter(Boolean);
+                const aOverviewPayrollClassificationOptions = aOverviewDistinctPayrollClassifications.map(id => ({ id: id }));
+                oModel.setProperty("/overviewPayrollClassifications", aOverviewPayrollClassificationOptions);
+
+                // Clear all schedule multi combo box selections
+                const oPayeeFilter = this.byId("schedulePayeeFilter");
+                if (oPayeeFilter) {
+                    oPayeeFilter.setSelectedKeys([]);
+                }
+                const oProductFilter = this.byId("scheduleProductFilter");
+                if (oProductFilter) {
+                    oProductFilter.setSelectedKeys([]);
+                }
+                const oPayrollClassificationFilter = this.byId("schedulePayrollClassificationFilter");
+                if (oPayrollClassificationFilter) {
+                    oPayrollClassificationFilter.setSelectedKeys([]);
+                }
+
+                // Clear all overview multi combo box selections
+                const oOverviewPayeeFilter = this.byId("overviewPayeeFilter");
+                if (oOverviewPayeeFilter) {
+                    oOverviewPayeeFilter.setSelectedKeys([]);
+                }
+                const oOverviewProductFilter = this.byId("overviewProductFilter");
+                if (oOverviewProductFilter) {
+                    oOverviewProductFilter.setSelectedKeys([]);
+                }
+                const oOverviewPayrollClassificationFilter = this.byId("overviewPayrollClassificationFilter");
+                if (oOverviewPayrollClassificationFilter) {
+                    oOverviewPayrollClassificationFilter.setSelectedKeys([]);
+                }
+
+                MessageToast.show(`Data refreshed successfully: ${aSchedule.length} schedule entries and ${aOverview.length} overview records`);
+
+            } catch (error) {
+                MessageBox.error("Error refreshing data: " + error.message);
             } finally {
                 BusyIndicator.hide();
             }
@@ -690,8 +1143,18 @@ sap.ui.define([
         },
 
         onSchedulePayeeFilterChange(oEvent) {
-            const oMultiComboBox = oEvent.getSource();
-            const aSelectedKeys = oMultiComboBox.getSelectedKeys();
+            this._applyScheduleFilters();
+        },
+
+        onScheduleProductFilterChange(oEvent) {
+            this._applyScheduleFilters();
+        },
+
+        onSchedulePayrollClassificationFilterChange(oEvent) {
+            this._applyScheduleFilters();
+        },
+
+        _applyScheduleFilters() {
             const oModel = this.getView().getModel();
             const oScheduleModel = this.getView().getModel("scheduleData");
             
@@ -703,20 +1166,135 @@ sap.ui.define([
                 oModel.setProperty("/scheduleOriginal", [...aOriginalSchedule]);
             }
             
-            // If no selection, show all data
-            if (!aSelectedKeys || aSelectedKeys.length === 0) {
+            // Get selected filter values
+            const oPayeeFilter = this.byId("schedulePayeeFilter");
+            const oProductFilter = this.byId("scheduleProductFilter");
+            const oPayrollClassificationFilter = this.byId("schedulePayrollClassificationFilter");
+            
+            const aSelectedPayeeIds = oPayeeFilter ? oPayeeFilter.getSelectedKeys() : [];
+            const aSelectedProducts = oProductFilter ? oProductFilter.getSelectedKeys() : [];
+            const aSelectedPayrollClassifications = oPayrollClassificationFilter ? oPayrollClassificationFilter.getSelectedKeys() : [];
+            
+            // Check if any filter is active
+            const bHasActiveFilters = (aSelectedPayeeIds && aSelectedPayeeIds.length > 0) ||
+                                      (aSelectedProducts && aSelectedProducts.length > 0) ||
+                                      (aSelectedPayrollClassifications && aSelectedPayrollClassifications.length > 0);
+            
+            if (!bHasActiveFilters) {
+                // No filters active, show all data
                 oScheduleModel.setData([...aOriginalSchedule]);
                 oModel.setProperty("/isFiltered", false);
                 oModel.setProperty("/currentFilter", null);
             } else {
-                // Filter schedule by selected Payee IDs
-                const aFilteredSchedule = aOriginalSchedule.filter(item => 
-                    aSelectedKeys.includes(item.PayeeId)
-                );
+                // Apply all active filters
+                let aFilteredSchedule = [...aOriginalSchedule];
+                
+                // Filter by Payee ID if selected
+                if (aSelectedPayeeIds && aSelectedPayeeIds.length > 0) {
+                    aFilteredSchedule = aFilteredSchedule.filter(item => 
+                        aSelectedPayeeIds.includes(item.PayeeId)
+                    );
+                }
+                
+                // Filter by Product if selected
+                if (aSelectedProducts && aSelectedProducts.length > 0) {
+                    aFilteredSchedule = aFilteredSchedule.filter(item => 
+                        aSelectedProducts.includes(item.Product)
+                    );
+                }
+                
+                // Filter by Payroll Classification if selected
+                if (aSelectedPayrollClassifications && aSelectedPayrollClassifications.length > 0) {
+                    aFilteredSchedule = aFilteredSchedule.filter(item => 
+                        aSelectedPayrollClassifications.includes(item["Payroll Classification"])
+                    );
+                }
                 
                 oScheduleModel.setData(aFilteredSchedule);
                 oModel.setProperty("/isFiltered", true);
-                oModel.setProperty("/currentFilter", aSelectedKeys.join(", "));
+                
+                // Build filter description
+                const aFilterParts = [];
+                if (aSelectedPayeeIds && aSelectedPayeeIds.length > 0) {
+                    aFilterParts.push(`Payee: ${aSelectedPayeeIds.join(", ")}`);
+                }
+                if (aSelectedProducts && aSelectedProducts.length > 0) {
+                    aFilterParts.push(`Product: ${aSelectedProducts.join(", ")}`);
+                }
+                if (aSelectedPayrollClassifications && aSelectedPayrollClassifications.length > 0) {
+                    aFilterParts.push(`Classification: ${aSelectedPayrollClassifications.join(", ")}`);
+                }
+                oModel.setProperty("/currentFilter", aFilterParts.join(" | "));
+            }
+        },
+
+        onOverviewPayeeFilterChange(oEvent) {
+            this._applyOverviewFilters();
+        },
+
+        onOverviewProductFilterChange(oEvent) {
+            this._applyOverviewFilters();
+        },
+
+        onOverviewPayrollClassificationFilterChange(oEvent) {
+            this._applyOverviewFilters();
+        },
+
+        _applyOverviewFilters() {
+            const oModel = this.getView().getModel();
+            const oOverviewModel = this.getView().getModel("overviewData");
+            
+            // Get original overview data
+            const aOriginalOverview = oModel.getProperty("/overviewOriginal") || oOverviewModel.getData();
+            
+            // Store original overview if not already stored
+            if (!oModel.getProperty("/overviewOriginal")) {
+                oModel.setProperty("/overviewOriginal", [...aOriginalOverview]);
+            }
+            
+            // Get selected filter values
+            const oPayeeFilter = this.byId("overviewPayeeFilter");
+            const oProductFilter = this.byId("overviewProductFilter");
+            const oPayrollClassificationFilter = this.byId("overviewPayrollClassificationFilter");
+            
+            const aSelectedPayeeIds = oPayeeFilter ? oPayeeFilter.getSelectedKeys() : [];
+            const aSelectedProducts = oProductFilter ? oProductFilter.getSelectedKeys() : [];
+            const aSelectedPayrollClassifications = oPayrollClassificationFilter ? oPayrollClassificationFilter.getSelectedKeys() : [];
+            
+            // Check if any filter is active
+            const bHasActiveFilters = (aSelectedPayeeIds && aSelectedPayeeIds.length > 0) ||
+                                      (aSelectedProducts && aSelectedProducts.length > 0) ||
+                                      (aSelectedPayrollClassifications && aSelectedPayrollClassifications.length > 0);
+            
+            if (!bHasActiveFilters) {
+                // No filters active, show all data
+                oOverviewModel.setData([...aOriginalOverview]);
+            } else {
+                // Apply all active filters
+                let aFilteredOverview = [...aOriginalOverview];
+                
+                // Filter by Payee ID if selected
+                if (aSelectedPayeeIds && aSelectedPayeeIds.length > 0) {
+                    aFilteredOverview = aFilteredOverview.filter(item => 
+                        aSelectedPayeeIds.includes(item.PayeeId)
+                    );
+                }
+                
+                // Filter by Product if selected
+                if (aSelectedProducts && aSelectedProducts.length > 0) {
+                    aFilteredOverview = aFilteredOverview.filter(item => 
+                        aSelectedProducts.includes(item.Product)
+                    );
+                }
+                
+                // Filter by Payroll Classification if selected
+                if (aSelectedPayrollClassifications && aSelectedPayrollClassifications.length > 0) {
+                    aFilteredOverview = aFilteredOverview.filter(item => 
+                        aSelectedPayrollClassifications.includes(item["Payroll Classification"])
+                    );
+                }
+                
+                oOverviewModel.setData(aFilteredOverview);
             }
         },
         
@@ -994,6 +1572,43 @@ sap.ui.define([
             } catch (error) {
                 BusyIndicator.hide();
                 MessageBox.error("Error saving setup: " + error.message);
+            }
+        },
+
+        async getAllPeriods() {
+            const sUrl = this.getOwnerComponent().getManifestObject().resolveUri(this.getOwnerComponent().getManifestEntry("sap.app").dataSources.tcmp.uri);
+            try {
+                fetch(`${sUrl}/CS_V_PERIODS/CS_V_PERIODS?$filter=((PERIODTYPESEQ eq 2814749767106569 or PERIODTYPESEQ eq 2814749767106563 or PERIODTYPESEQ eq 2814749767106561) and REMOVEDATE eq 2200-01-01T00:00:00.0000000Z)`, {
+                    method: "GET",
+                    headers: {
+                        "Content-Type": "application/json"
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error("Network response was not ok");
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    const result = data.value || [];
+                    // Process the result to add a combined date range property
+                    const processedResult = result.map(item => {
+                        const startDate = item.STARTDATE ? item.STARTDATE.split('T')[0] : '';
+                        const endDate = item.ENDDATE ? item.ENDDATE.split('T')[0] : '';
+                        return {
+                            ...item,
+                            PERIOD_RANGE: `${startDate} - ${endDate}`
+                        };
+                    });
+                    this.getView().getModel("periodsData").setData(processedResult);
+                })
+                .catch(error => {
+                    MessageBox.error("Error fetching periods: " + error.message);
+                    console.error("Error fetching periods:", error);
+                });
+            } catch (error) {
+                MessageBox.error("Error fetching periods: " + error.message);
             }
         },
 
