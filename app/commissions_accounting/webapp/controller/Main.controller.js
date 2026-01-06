@@ -1598,7 +1598,7 @@ sap.ui.define([
                         const endDate = item.ENDDATE ? item.ENDDATE.split('T')[0] : '';
                         return {
                             ...item,
-                            PERIOD_RANGE: `${startDate} - ${endDate}`
+                            PERIOD_RANGE: `${startDate} to ${endDate}`
                         };
                     });
                     this.getView().getModel("periodsData").setData(processedResult);

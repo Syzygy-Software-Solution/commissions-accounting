@@ -29,8 +29,8 @@
                         id="periodsComboBox"
                         showSecondaryValues="true"
                         items="{periodsData>/}"
-                        placeholder="Select Period"
-                        width="200px">
+                        placeholder="Select Period to run Amortization"
+                        width="300px">
                         <core:ListItem key="{periodsData>NAME}" text="{periodsData>NAME}" additionalText="{periodsData>PERIOD_RANGE}" />
                     </ComboBox>
                     <Button text="Execute Amortization" type="Success" icon="sap-icon://play" press=".onExecuteAmortizationPress" />
