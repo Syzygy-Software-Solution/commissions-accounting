@@ -22,13 +22,22 @@
                 <Text text="Product"/>
             </Column>
             <Column width="20%">
+                <Text text="Product Category"/>
+            </Column>
+            <Column width="20%">
+                <Text text="Commissions Category"/>
+            </Column>
+            <Column width="20%">
                 <Text text="Cap %"/>
             </Column>
-            <Column width="20%">
+            <Column width="30%">
                 <Text text="Term"/>
             </Column>
+            <!-- <Column width="20%">
+                <Text text="Term"/>
+            </Column> -->
             <Column width="20%">
-                <Text text="Payment Frequency"/>
+                <Text text="Amortization Frequency"/>
             </Column>
             <!-- <Column width="10%">
                 <Text text="Data Type"/>
@@ -43,7 +52,7 @@
                 <Text text="Payroll Classification"/>
             </Column>
             <Column width="20%">
-                <Text text="Payment Start Date"/>
+                <Text text="Amortization Start Month"/>
             </Column>
         </columns>
         <items>
@@ -56,19 +65,43 @@
                         <core:Item key="On-Prem" text="On-Prem"/>
                         <core:Item key="Others" text="Others"/>
                     </ComboBox>
+                    <!-- Product Category -->
+                    <ComboBox
+                        id="idProductCategory"
+                        selectedKey="{currentSetups>productCategory}">
+                        <core:Item key="Category1" text="Category1"/>
+                        <core:Item key="Category2" text="Category2"/>
+                        <core:Item key="Category3" text="Category3"/>
+                    </ComboBox>
+                    
+                    <!-- Commissions Category -->
+                    <ComboBox
+                        id="idCommissionsCategory"
+                        selectedKey="{currentSetups>commissionsCategory}">
+                        <core:Item key="Spiff" text="Spiff"/>
+                        <core:Item key="MBO" text="MBO"/>
+                        <core:Item key="Commissions" text="Commissions"/>
+                    </ComboBox>
+                    <!-- Cap % -->
                     <Input
                         value="{currentSetups>capPercent}"
                         type="Number"
                         editable="{currentSetups>editable}"/>
-                    <Input
+
+                    <HBox alignContent="SpaceBetween">
+                        <Input value="{currentSetups>term}" />
+                        <CheckBox textAlign="End" id="idContractTerm" text="Use Contract term ?" editable="true"></CheckBox>
+                    </HBox>
+                    
+                    <!-- <Input
                         value="{currentSetups>term}"
                         type="Number"
-                        editable="{currentSetups>editable}"/>
+                        editable="{currentSetups>editable}"/> -->
                     <ComboBox
                         selectedKey="{currentSetups>paymentFrequency}"
                         editable="{currentSetups>editable}">
                         <core:Item key="Monthly" text="Monthly"/>
-                        <core:Item key="Bi-Monthly" text="Bi-Monthly"/>
+                        <core:Item key="Bi-Weekly" text="Bi-Weekly"/>
                         <core:Item key="Quarterly" text="Quarterly"/>
                     </ComboBox>
                     <!-- <ComboBox

@@ -38,7 +38,7 @@
                 placeholder="Select Frequency">
                 <core:Item key="Monthly" text="Monthly" />
                 <core:Item key="Quarterly" text="Quarterly" />
-                <core:Item key="Bi-Monthly" text="Bi-Monthly" />
+                <core:Item key="Bi-Weekly" text="Bi-Weekly" />
             </ComboBox>
 
             <Label text="Payroll Classification" required="true" />

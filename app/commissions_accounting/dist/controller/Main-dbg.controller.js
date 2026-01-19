@@ -227,7 +227,7 @@ sap.ui.define([
                     const freqMonths = {
                         "Monthly": 1,
                         "Quarterly": 3,
-                        "Bi-Monthly": 2,
+                        "Bi-Weekly": 2,
                         "Semi-Annually": 6,
                         "Annually": 12
                     }[payoutFreq] || 1;
@@ -526,10 +526,10 @@ sap.ui.define([
                         "totalIncentive": 10000
                     },
                     {
-                        "payeeId": "EMP-101",
-                        "orderId": "1000235",
+                        "payeeId": "EMP-102",
+                        "orderId": "1000236",
                         "product": "Cloud",
-                        "totalIncentive": 10000
+                        "totalIncentive": 15000
                     }
                 ];
 
@@ -1047,7 +1047,7 @@ sap.ui.define([
                         const freqMonths = {
                             "Monthly": 1,
                             "Quarterly": 3,
-                            "Bi-Monthly": 2,
+                            "Bi-Weekly": 2,
                             "Semi-Annually": 6,
                             "Annually": 12
                         }[payoutFreq] || 1;
