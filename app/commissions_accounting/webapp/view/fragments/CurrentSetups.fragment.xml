@@ -60,10 +60,9 @@
                 <cells>
                     <ComboBox
                         selectedKey="{currentSetups>product}"
-                        editable="{currentSetups>editable}">
-                        <core:Item key="Cloud" text="Cloud"/>
-                        <core:Item key="On-Prem" text="On-Prem"/>
-                        <core:Item key="Others" text="Others"/>
+                        editable="{currentSetups>editable}"
+                        items="{productIds>/}">
+                        <core:Item key="{productIds>PRODUCTID}" text="{productIds>PRODUCTID}"/>
                     </ComboBox>
                     <!-- Product Category -->
                     <ComboBox

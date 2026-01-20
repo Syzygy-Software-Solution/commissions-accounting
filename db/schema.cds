@@ -1,4 +1,4 @@
-namespace db;
+namespace sz;
 using { cuid, managed } from '@sap/cds/common';
 
 entity AmortizationSetup: cuid, managed{
@@ -28,5 +28,17 @@ entity AmortizationSchedule: cuid, managed{
     expenseStartDate: Date;
     expenseEndDate: Date;
     notes: String;
+}
+
+entity DataSourceMappings: cuid, managed{
+    isActive: Boolean;
+    columnKey: String;
+    columnName: String;
+    position: Integer;
+    defaultLabel: String;
+    customLabel: String;
+    tableName: String;
+    fieldName: String;
+    connectViaAPI: Boolean;
 }
 

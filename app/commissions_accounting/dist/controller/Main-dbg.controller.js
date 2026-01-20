@@ -36,10 +36,44 @@ sap.ui.define([
             var oPeriodsModel = new JSONModel([]);
             this.getView().setModel(oPeriodsModel, "periodsData");
 
-            await this.getCurrentSetups();
+            var oProductIdsModel = new JSONModel([]);
+            this.getView().setModel(oProductIdsModel, "productIds");
 
-            await this.getAllPeriods();
-            
+            // Hardcoded data - commented out, now fetching from database
+            // var oDataSourceModel = new JSONModel([
+            //     { columnKey: "productId", columnName: "Product Id", defaultLabel: "Product Id", customLabel: "", tableName: "", fieldName: "", isActive: true },
+            //     { columnKey: "productCategory", columnName: "Product Category", defaultLabel: "Product Category", customLabel: "", tableName: "", fieldName: "", isActive: true },
+            //     { columnKey: "commissionsCategory", columnName: "Commissions Category", defaultLabel: "Commissions Category", customLabel: "", tableName: "", fieldName: "", isActive: true },
+            //     { columnKey: "capPercent", columnName: "CAP %", defaultLabel: "CAP %", customLabel: "", tableName: "", fieldName: "", isActive: true },
+            //     { columnKey: "term", columnName: "Term", defaultLabel: "Term", customLabel: "", tableName: "", fieldName: "", isActive: true },
+            //     { columnKey: "amortizationFrequency", columnName: "Amortization Frequency", defaultLabel: "Amortization Frequency", customLabel: "", tableName: "", fieldName: "", isActive: true },
+            //     { columnKey: "payrollClassification", columnName: "Payroll Classification", defaultLabel: "Payroll Classification", customLabel: "", tableName: "", fieldName: "", isActive: true },
+            //     { columnKey: "amortizationStartMonth", columnName: "Amortization start month", defaultLabel: "Amortization start month", customLabel: "", tableName: "", fieldName: "", isActive: true },
+            //     { columnKey: "genericAttr1", columnName: "Generic Attribute 1", defaultLabel: "Generic Attribute 1", customLabel: "", tableName: "", fieldName: "", isActive: false },
+            //     { columnKey: "genericAttr2", columnName: "Generic Attribute 2", defaultLabel: "Generic Attribute 2", customLabel: "", tableName: "", fieldName: "", isActive: false },
+            //     { columnKey: "genericAttr3", columnName: "Generic Attribute 3", defaultLabel: "Generic Attribute 3", customLabel: "", tableName: "", fieldName: "", isActive: false },
+            //     { columnKey: "genericAttr4", columnName: "Generic Attribute 4", defaultLabel: "Generic Attribute 4", customLabel: "", tableName: "", fieldName: "", isActive: false },
+            //     { columnKey: "genericAttr5", columnName: "Generic Attribute 5", defaultLabel: "Generic Attribute 5", customLabel: "", tableName: "", fieldName: "", isActive: false },
+            //     { columnKey: "genericAttr6", columnName: "Generic Attribute 6", defaultLabel: "Generic Attribute 6", customLabel: "", tableName: "", fieldName: "", isActive: false },
+            //     { columnKey: "genericAttr7", columnName: "Generic Attribute 7", defaultLabel: "Generic Attribute 7", customLabel: "", tableName: "", fieldName: "", isActive: false }
+            // ]);
+            // this.getView().setModel(oDataSourceModel, "dataSources");
+
+            var oDataSourceModel = new JSONModel([]);
+            this.getView().setModel(oDataSourceModel, "dataSources");
+
+            var oTableNamesModel = new JSONModel([]);
+            this.getView().setModel(oTableNamesModel, "tableNames");
+
+            var oFieldNamesModel = new JSONModel([]);
+            this.getView().setModel(oFieldNamesModel, "fieldNames");
+
+            await Promise.all([
+                this.getCurrentSetups(),
+                this.getAllPeriods(),
+                this.getAllProducts()
+            ]);
+
             // Load SheetJS library asynchronously
             this._loadSheetJS();
             
@@ -53,13 +87,193 @@ sap.ui.define([
                 const script = document.createElement("script");
                 script.src = "https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js";
                 script.async = true;
-                script.onload = () => {
+                script.onload = () => { 
                     console.log("SheetJS library loaded successfully");
                 };
                 script.onerror = () => {
                     console.error("Failed to load SheetJS library");
                 };
                 document.head.appendChild(script);
+            }
+        },
+
+        onToggleMenuPress(oEvent){
+            const oToolPage = this.getView().byId("idToolPage");
+            var bSideExpanded = oToolPage.getSideExpanded();
+			// this._setToggleButtonTooltip(bSideExpanded);
+			oToolPage.setSideExpanded(!oToolPage.getSideExpanded());
+        },
+
+        async onSideNavItemSelect(oEvent){
+            const sSelectedKey = oEvent.getParameter("item").getKey();
+            switch (sSelectedKey) {
+                case "amortizationDetails":
+                    break;
+                case "configAmortization":
+                    BusyIndicator.show();
+                    await Promise.all([
+                        this.getDataSourceTables(),
+                        this.getDataSourceMappings()
+                    ]);
+                    BusyIndicator.hide();
+                    break;
+                default:
+                    break;
+            }
+            this.getView().byId("idNavContainer").to(this.getView().createId(sSelectedKey));
+        },
+
+        async getDataSourceTables(){
+            const sUrl = this.getOwnerComponent().getManifestObject().resolveUri(this.getOwnerComponent().getManifestEntry("sap.app").dataSources.tcmp.uri);
+
+            try {
+                const response = await fetch(`${sUrl}/V_CS_TABLES/V_CS_TABLES`);
+                if (!response.ok) {
+                    throw new Error("Network response was not ok");
+                }
+                const data = await response.json();
+                const aTables = data.value || [];
+                const oTableNamesModel = this.getView().getModel("tableNames");
+                oTableNamesModel.setSizeLimit(aTables.length);
+                oTableNamesModel.setData(aTables);
+            } catch (error) {
+                MessageBox.error("Error fetching tables: " + error.message);
+                console.error("Error fetching tables:", error);
+            }
+        },
+
+        async getDataSourceMappings(){
+            const sUrl = this.getOwnerComponent().getManifestObject().resolveUri(
+                this.getOwnerComponent().getManifestEntry("sap.app").dataSources.mainService.uri
+            );
+
+            try {
+                const response = await fetch(`${sUrl}/DataSourceMappings`);
+                if (!response.ok) {
+                    throw new Error("Network response was not ok");
+                }
+                const data = await response.json();
+                let aMappings = data.value || [];
+                
+                // Sort by position
+                aMappings.sort((a, b) => (a.position || 0) - (b.position || 0));
+                
+                const oDataSourceModel = this.getView().getModel("dataSources");
+                oDataSourceModel.setSizeLimit(aMappings.length);
+                oDataSourceModel.setData(aMappings);
+            } catch (error) {
+                MessageBox.error("Error fetching data source mappings: " + error.message);
+                console.error("Error fetching data source mappings:", error);
+            }
+        },
+
+        async onTableNameChange(oEvent) {
+            const oComboBox = oEvent.getSource();
+            const sSelectedTable = oComboBox.getSelectedKey();
+            
+            if (!sSelectedTable) {
+                return;
+            }
+
+            BusyIndicator.show(0);
+            
+            const sUrl = this.getOwnerComponent().getManifestObject().resolveUri(this.getOwnerComponent().getManifestEntry("sap.app").dataSources.tcmp.uri);
+
+            try {
+                const response = await fetch(`${sUrl}/V_CS_TABLE_COLUMNS/V_CS_TABLE_COLUMNS?$filter=TABLE_NAME eq '${sSelectedTable}'`);
+                if (!response.ok) {
+                    throw new Error("Network response was not ok");
+                }
+                const data = await response.json();
+                const aColumns = data.value || [];
+                const oFieldNamesModel = this.getView().getModel("fieldNames");
+                oFieldNamesModel.setSizeLimit(aColumns.length);
+                oFieldNamesModel.setData(aColumns);
+            } catch (error) {
+                MessageBox.error("Error fetching field names: " + error.message);
+                console.error("Error fetching field names:", error);
+            } finally {
+                BusyIndicator.hide();
+            }
+        },
+
+        async onSaveDataSourceMapping() {
+            BusyIndicator.show(0);
+            
+            try {
+                const oDataSourceModel = this.getView().getModel("dataSources");
+                const aDataSources = oDataSourceModel.getData();
+                
+                // Validate that at least one field is active
+                const hasActiveFields = aDataSources.some(item => item.isActive);
+                if (!hasActiveFields) {
+                    MessageBox.warning("Please activate at least one field before saving.");
+                    BusyIndicator.hide();
+                    return;
+                }
+                
+                // Validate for duplicate positions
+                const positionMap = new Map();
+                const duplicatePositions = [];
+
+                for (let i = 0; i < aDataSources.length; i++) {
+                    const item = aDataSources[i];
+                    const position = parseInt(item.position, 10);
+
+                    if (!isNaN(position)) {
+                        if (positionMap.has(position)) {
+                            duplicatePositions.push(position);
+                        } else {
+                            positionMap.set(position, i);
+                        }
+                    }
+                }
+                
+                if (duplicatePositions.length > 0) {
+                    MessageBox.error(`Duplicate positions found: ${[...new Set(duplicatePositions)].join(", ")}. Each column must have a unique position.`);
+                    BusyIndicator.hide();
+                    return;
+                }
+                
+                // Prepare data for saving
+                const aMappingData = aDataSources.map(item => {
+                    const position = parseInt(item.position, 10);
+                    return {
+                        columnKey: item.columnKey,
+                        columnName: item.columnName,
+                        defaultLabel: item.defaultLabel,
+                        customLabel: item.customLabel || null,
+                        position: !isNaN(position) ? position : null,
+                        tableName: item.tableName || null,
+                        fieldName: item.fieldName || null,
+                        isActive: item.isActive || false,
+                        connectViaAPI: false
+                    };
+                });
+                
+                const sUrl = this.getOwnerComponent().getManifestObject().resolveUri(
+                    this.getOwnerComponent().getManifestEntry("sap.app").dataSources.mainService.uri
+                );
+                
+                const response = await fetch(`${sUrl}/saveDataSourceMappings`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ mappingData: aMappingData })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                MessageToast.show("Data source mappings saved successfully");
+                
+            } catch (error) {
+                MessageBox.error(`Failed to save data source mappings: ${error.message}`);
+            } finally {
+                BusyIndicator.hide();
             }
         },
 
@@ -1609,6 +1823,34 @@ sap.ui.define([
                 });
             } catch (error) {
                 MessageBox.error("Error fetching periods: " + error.message);
+            }
+        },
+
+        async getAllProducts() {
+            const sUrl = this.getOwnerComponent().getManifestObject().resolveUri(this.getOwnerComponent().getManifestEntry("sap.app").dataSources.tcmp.uri);
+            try {
+                fetch(`${sUrl}/V_CS_PRODUCTID/V_CS_PRODUCTID`, {
+                    method: "GET",
+                    headers: {
+                        "Content-Type": "application/json"
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error("Network response was not ok");
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    const result = data.value || [];
+                    this.getView().getModel("productIds").setData(result);
+                })
+                .catch(error => {
+                    MessageBox.error("Error fetching products: " + error.message);
+                    console.error("Error fetching products:", error);
+                });
+            } catch (error) {
+                MessageBox.error("Error fetching products: " + error.message);
             }
         },
 
