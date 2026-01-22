@@ -64,16 +64,6 @@
                         </uxap:headerTitle>
 
                         <uxap:sections>
-                            <uxap:ObjectPageSection  title="Setup" titleUppercase="false">
-                                <uxap:subSections>
-                                    <uxap:ObjectPageSubSection>
-                                        <VBox class="sapUiSmallMargin">
-                                            <core:Fragment fragmentName="commissionsaccounting.view.fragments.CurrentSetups" type="XML" />  
-                                        </VBox>
-                                    </uxap:ObjectPageSubSection>
-                                </uxap:subSections>
-                            </uxap:ObjectPageSection>
-                            
                             <uxap:ObjectPageSection title="Amortization Schedule" titleUppercase="false">
                                 <uxap:subSections>
                                     <uxap:ObjectPageSubSection>
@@ -287,7 +277,7 @@
                         </uxap:sections>
                     </uxap:ObjectPageLayout>
 
-                    <uxap:ObjectPageLayout id="configAmortization" useIconTabBar="true">
+                    <uxap:ObjectPageLayout id="configAmortization" useIconTabBar="true" subSectionLayout="TitleOnLeft" navigate="onConfigSubSectionChange">
                         <uxap:headerTitle>
                             <uxap:ObjectPageDynamicHeaderTitle>
                                 <uxap:expandedHeading>
@@ -306,7 +296,17 @@
                         </uxap:headerTitle>
 
                         <uxap:sections>
-                            <uxap:ObjectPageSection  title="Data Source Mapping" titleUppercase="false">
+                            <uxap:ObjectPageSection title="Setup" titleUppercase="false">
+                                <uxap:subSections>
+                                    <uxap:ObjectPageSubSection>
+                                        <VBox class="sapUiSmallMargin">
+                                            <core:Fragment fragmentName="commissionsaccounting.view.fragments.CurrentSetups" type="XML" />  
+                                        </VBox>
+                                    </uxap:ObjectPageSubSection>
+                                </uxap:subSections>
+                            </uxap:ObjectPageSection>
+
+                            <uxap:ObjectPageSection title="Data Source Mapping" titleUppercase="false">
                                 <uxap:subSections>
                                     <uxap:ObjectPageSubSection>
                                         <VBox class="sapUiSmallMargin">
@@ -316,7 +316,7 @@
                                 </uxap:subSections>
                             </uxap:ObjectPageSection>
 
-                            <uxap:ObjectPageSection title="Amortization Calculation" titleUppercase="false">
+                            <uxap:ObjectPageSection title="Amortization Calculation" visible="false" titleUppercase="false">
                                 <uxap:subSections>
                                     <uxap:ObjectPageSubSection>
                                         <VBox class="sapUiSmallMargin">
@@ -338,9 +338,5 @@
                 </pages>
             </NavContainer>
         </tnt:mainContents>
-
     </tnt:ToolPage>
-
-
-    
 </mvc:View>

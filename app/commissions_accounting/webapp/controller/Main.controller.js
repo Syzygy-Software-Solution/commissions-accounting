@@ -4,8 +4,13 @@ sap.ui.define([
     "sap/m/MessageToast",
     "sap/m/MessageBox",
     "sap/ui/core/BusyIndicator",
-    "sap/ui/core/Fragment"
-], (Controller, JSONModel, MessageToast, MessageBox, BusyIndicator, Fragment) => {
+    "sap/ui/core/Fragment",
+    "sap/m/Column",
+    "sap/m/Text",
+    "sap/m/Input",
+    "sap/m/ColumnListItem",
+    "sap/m/ComboBox"
+], (Controller, JSONModel, MessageToast, MessageBox, BusyIndicator, Fragment, Column, Text, Input, ColumnListItem, ComboBox) => {
     "use strict";
 
     return Controller.extend("commissionsaccounting.controller.Main", {
@@ -65,13 +70,14 @@ sap.ui.define([
             var oTableNamesModel = new JSONModel([]);
             this.getView().setModel(oTableNamesModel, "tableNames");
 
-            var oFieldNamesModel = new JSONModel([]);
-            this.getView().setModel(oFieldNamesModel, "fieldNames");
+            var oColumnConfigModel = new JSONModel([]);
+            this.getView().setModel(oColumnConfigModel, "columnConfig");
 
             await Promise.all([
-                this.getCurrentSetups(),
+                // this.getCurrentSetups(),
                 this.getAllPeriods(),
-                this.getAllProducts()
+                // this.getAllProducts(),
+                this.getActiveDataSourceMappings()
             ]);
 
             // Load SheetJS library asynchronously
@@ -79,6 +85,9 @@ sap.ui.define([
             
             // Initialize selected file reference
             this._oSelectedFile = null;
+            
+            // Initialize cache for dropdown data (lazy loading)
+            this._dropdownCache = {};
         },
 
         _loadSheetJS() {
@@ -111,16 +120,76 @@ sap.ui.define([
                     break;
                 case "configAmortization":
                     BusyIndicator.show();
-                    await Promise.all([
-                        this.getDataSourceTables(),
-                        this.getDataSourceMappings()
-                    ]);
+                    // Load active data source mappings and build dynamic table
+                    await this.getActiveDataSourceMappings();
                     BusyIndicator.hide();
                     break;
                 default:
                     break;
             }
             this.getView().byId("idNavContainer").to(this.getView().createId(sSelectedKey));
+        },
+
+        async onConfigSubSectionChange(oEvent) {
+            const oSubSection = oEvent.getParameter("subSection");
+            const sSectionTitle = oSubSection.getParent().getTitle();
+            
+            // Load data when navigating to Data Source Mapping section
+            if (sSectionTitle === "Data Source Mapping") {
+                BusyIndicator.show();
+                
+                // Check if data is already loaded
+                const oDataSourcesModel = this.getView().getModel("dataSources");
+                const oTableNamesModel = this.getView().getModel("tableNames");
+                const aCurrentMappings = oDataSourcesModel.getData();
+                const aCurrentTables = oTableNamesModel.getData();
+                
+                const aPromises = [];
+                
+                // Only fetch table names if not already loaded
+                if (!aCurrentTables || aCurrentTables.length === 0) {
+                    aPromises.push(this.getDataSourceTables());
+                }
+                
+                // Only fetch mappings if not already loaded
+                if (!aCurrentMappings || aCurrentMappings.length === 0) {
+                    aPromises.push(this.getDataSourceMappings());
+                } else {
+                    // Data is already loaded, just load missing field names if any
+                    aPromises.push(this._loadMissingFieldNames(aCurrentMappings));
+                }
+                
+                await Promise.all(aPromises);
+                BusyIndicator.hide();
+            }
+        },
+
+        async _loadMissingFieldNames(aMappings) {
+            const sUrl = this.getOwnerComponent().getManifestObject().resolveUri(
+                this.getOwnerComponent().getManifestEntry("sap.app").dataSources.tcmp.uri
+            );
+            const oDataSourcesModel = this.getView().getModel("dataSources");
+
+            // Only load field names for rows that have a table name but no field names loaded
+            const aPromises = aMappings.map(async (mapping, index) => {
+                if (mapping.tableName && (!mapping._fieldNames || mapping._fieldNames.length === 0)) {
+                    try {
+                        const response = await fetch(`${sUrl}/V_CS_TABLE_COLUMNS/V_CS_TABLE_COLUMNS?$filter=TABLE_NAME eq '${mapping.tableName}'`);
+                        if (response.ok) {
+                            const data = await response.json();
+                            const aColumns = data.value || [];
+                            oDataSourcesModel.setProperty(`/${index}/_fieldNames`, aColumns);
+                        }
+                    } catch (error) {
+                        console.error(`Error loading field names for ${mapping.tableName}:`, error);
+                    }
+                }
+            });
+
+            await Promise.all(aPromises);
+            if (aPromises.length > 0) {
+                oDataSourcesModel.refresh();
+            }
         },
 
         async getDataSourceTables(){
@@ -133,9 +202,27 @@ sap.ui.define([
                 }
                 const data = await response.json();
                 const aTables = data.value || [];
+                
+                // Filter to keep only specific tables
+                const allowedTables = [
+                    "CS_SALESTRANSACTION",
+                    "CS_TRANSACTIONASSIGNMENT",
+                    "CS_COMMISSION",
+                    "CS_CREDIT",
+                    "CS_INCENTIVE",
+                    "CS_MEASUREMENT",
+                    "CS_PARTICIPANT",
+                    "CS_POSITION",
+                    "CS_TITLE"
+                ];
+                
+                const aFilteredTables = aTables.filter(table => 
+                    allowedTables.includes(table.TABLE_NAME)
+                );
+                
                 const oTableNamesModel = this.getView().getModel("tableNames");
-                oTableNamesModel.setSizeLimit(aTables.length);
-                oTableNamesModel.setData(aTables);
+                oTableNamesModel.setSizeLimit(aFilteredTables.length);
+                oTableNamesModel.setData(aFilteredTables);
             } catch (error) {
                 MessageBox.error("Error fetching tables: " + error.message);
                 console.error("Error fetching tables:", error);
@@ -147,6 +234,7 @@ sap.ui.define([
                 this.getOwnerComponent().getManifestEntry("sap.app").dataSources.mainService.uri
             );
 
+            BusyIndicator.show(0);
             try {
                 const response = await fetch(`${sUrl}/DataSourceMappings`);
                 if (!response.ok) {
@@ -158,18 +246,32 @@ sap.ui.define([
                 // Sort by position
                 aMappings.sort((a, b) => (a.position || 0) - (b.position || 0));
                 
+                // Initialize each row with an empty fieldNames array
+                aMappings.forEach(mapping => {
+                    mapping._fieldNames = [];
+                });
+                
                 const oDataSourceModel = this.getView().getModel("dataSources");
-                oDataSourceModel.setSizeLimit(aMappings.length);
+                // Remove size limit to accommodate any number of records/fields in the future
+                oDataSourceModel.setSizeLimit(999999);
                 oDataSourceModel.setData(aMappings);
+
+                // Fetch field names for all rows that have a table name
+                await this._loadFieldNamesForAllRows(aMappings);
+                this.getView().getModel("dataSources").refresh();
+                MessageToast.show("Data source mappings loaded successfully");
             } catch (error) {
                 MessageBox.error("Error fetching data source mappings: " + error.message);
                 console.error("Error fetching data source mappings:", error);
+            } finally {
+                BusyIndicator.hide();
             }
         },
 
         async onTableNameChange(oEvent) {
             const oComboBox = oEvent.getSource();
             const sSelectedTable = oComboBox.getSelectedKey();
+            const oBindingContext = oComboBox.getBindingContext("dataSources");
             
             if (!sSelectedTable) {
                 return;
@@ -186,15 +288,43 @@ sap.ui.define([
                 }
                 const data = await response.json();
                 const aColumns = data.value || [];
-                const oFieldNamesModel = this.getView().getModel("fieldNames");
-                oFieldNamesModel.setSizeLimit(aColumns.length);
-                oFieldNamesModel.setData(aColumns);
+                
+                // Update the field names for this specific row
+                const oDataSourcesModel = this.getView().getModel("dataSources");
+                const sPath = oBindingContext.getPath();
+                oDataSourcesModel.setProperty(sPath + "/_fieldNames", aColumns);
+
             } catch (error) {
                 MessageBox.error("Error fetching field names: " + error.message);
                 console.error("Error fetching field names:", error);
             } finally {
                 BusyIndicator.hide();
             }
+        },
+
+        async _loadFieldNamesForAllRows(aMappings) {
+            const sUrl = this.getOwnerComponent().getManifestObject().resolveUri(
+                this.getOwnerComponent().getManifestEntry("sap.app").dataSources.tcmp.uri
+            );
+            const oDataSourcesModel = this.getView().getModel("dataSources");
+
+            // Load field names for each row that has a table name and doesn't already have field names
+            const aPromises = aMappings.map(async (mapping, index) => {
+                if (mapping.tableName && (!mapping._fieldNames || mapping._fieldNames.length === 0)) {
+                    try {
+                        const response = await fetch(`${sUrl}/V_CS_TABLE_COLUMNS/V_CS_TABLE_COLUMNS?$filter=TABLE_NAME eq '${mapping.tableName}'`);
+                        if (response.ok) {
+                            const data = await response.json();
+                            const aColumns = data.value || [];
+                            oDataSourcesModel.setProperty(`/${index}/_fieldNames`, aColumns);
+                        }
+                    } catch (error) {
+                        console.error(`Error loading field names for ${mapping.tableName}:`, error);
+                    }
+                }
+            });
+
+            await Promise.all(aPromises);
         },
 
         async onSaveDataSourceMapping() {
@@ -552,33 +682,28 @@ sap.ui.define([
                 return;
             }
 
+            const oColumnConfig = this.getView().getModel("columnConfig").getData();
+            if (!oColumnConfig || oColumnConfig.length === 0) {
+                MessageBox.warning("Please configure data source mappings first.");
+                return;
+            }
+
             BusyIndicator.show(0);
 
             try {
-                // Create template data with column headers from CurrentSetups table
-                const aTemplateData = [
-                    {
-                        "Product": "",
-                        "Cap %": "",
-                        "Term": "",
-                        "Payment Frequency": "",
-                        "Payroll Classification": "",
-                        "Payment Start Date": ""
-                    }
-                ];
+                // Create template data with dynamic column headers based on configuration
+                const oTemplateRow = {};
+                oColumnConfig.forEach(colConfig => {
+                    oTemplateRow[colConfig.columnName] = "";
+                });
+
+                const aTemplateData = [oTemplateRow];
 
                 // Create worksheet
                 const ws = XLSX.utils.json_to_sheet(aTemplateData);
 
-                // Set column widths
-                ws['!cols'] = [
-                    { wch: 15 },  // Product
-                    { wch: 10 },  // Cap %
-                    { wch: 10 },  // Term
-                    { wch: 20 },  // Payment Frequency
-                    { wch: 25 },  // Payroll Classification
-                    { wch: 20 }   // Payment Start Date
-                ];
+                // Set column widths dynamically
+                ws['!cols'] = oColumnConfig.map(() => ({ wch: 20 }));
 
                 // Create workbook
                 const wb = XLSX.utils.book_new();
@@ -1854,6 +1979,254 @@ sap.ui.define([
             }
         },
 
+        async getActiveDataSourceMappings() {
+            const sUrl = this.getOwnerComponent().getManifestObject().resolveUri(
+                this.getOwnerComponent().getManifestEntry("sap.app").dataSources.mainService.uri
+            );
+
+            try {
+                const response = await fetch(`${sUrl}/DataSourceMappings`);
+                if (!response.ok) {
+                    throw new Error("Failed to fetch data source mappings");
+                }
+                const data = await response.json();
+                const aMappings = data.value || [];
+
+                // Filter only active mappings and sort by position
+                const aActiveMappings = aMappings
+                    .filter(mapping => mapping.isActive)
+                    .sort((a, b) => (a.position || 0) - (b.position || 0));
+
+                // Prepare column configuration
+                const aColumnConfig = aActiveMappings.map(mapping => ({
+                    columnKey: mapping.columnKey,
+                    columnName: mapping.customLabel || mapping.defaultLabel,
+                    tableName: mapping.tableName,
+                    fieldName: mapping.fieldName,
+                    position: mapping.position
+                }));
+
+                const oColumnConfigModel = this.getView().getModel("columnConfig");
+                oColumnConfigModel.setData(aColumnConfig);
+
+                console.log("Active column configuration loaded:", aColumnConfig);
+                
+                // Build the dynamic table after columns are loaded
+                this._buildDynamicSetupsTable();
+            } catch (error) {
+                console.error("Error fetching active data source mappings:", error);
+                MessageBox.error("Failed to load column configuration: " + error.message);
+            }
+        },
+
+        _buildDynamicSetupsTable() {
+            const oColumnConfig = this.getView().getModel("columnConfig").getData();
+            const oTable = this.byId("currentSetupsTable");
+            
+            if (!oTable || !oColumnConfig || oColumnConfig.length === 0) {
+                console.warn("Cannot build dynamic table: table or column config not available");
+                return;
+            }
+
+            // Remove existing columns
+            oTable.removeAllColumns();
+
+            // Create columns dynamically based on configuration
+            oColumnConfig.forEach(colConfig => {
+                const oColumn = new Column({
+                    width: "auto",
+                    header: new Text({
+                        text: colConfig.columnName
+                    })
+                });
+                oTable.addColumn(oColumn);
+            });
+
+            // Bind items with factory function
+            oTable.bindItems({
+                path: "currentSetups>/",
+                factory: this._createSetupRowFactory.bind(this)
+            });
+
+            console.log(`Dynamic table built with ${oColumnConfig.length} columns`);
+        },
+
+        async onRefreshSetupTable() {
+            BusyIndicator.show(0);
+            try {
+                // Refetch data source mappings
+                await this.getActiveDataSourceMappings();
+                
+                // Rebuild the table with new configuration
+                this._buildDynamicSetupsTable();
+                
+                MessageToast.show("Setup table refreshed with latest configuration");
+            } catch (error) {
+                console.error("Error refreshing setup table:", error);
+                MessageBox.error("Failed to refresh table: " + error.message);
+            } finally {
+                BusyIndicator.hide();
+            }
+        },
+
+        _createSetupRowFactory(sId, oContext) {
+            const oColumnConfig = this.getView().getModel("columnConfig").getData();
+            const aCells = [];
+
+            // Create cells based on column configuration
+            oColumnConfig.forEach(colConfig => {
+                // Check if this field is mapped to a table and field
+                const bIsMapped = colConfig.tableName && colConfig.fieldName;
+                
+                let oControl;
+                if (bIsMapped) {
+                    // Create ComboBox for mapped fields
+                    oControl = new ComboBox({
+                        selectedKey: `{currentSetups>${colConfig.columnKey}}`,
+                        editable: "{currentSetups>editable}",
+                        placeholder: `Select ${colConfig.columnName}`
+                    });
+                    
+                    // Store metadata for identifying the combo box
+                    oControl.data("tableName", colConfig.tableName);
+                    oControl.data("fieldName", colConfig.fieldName);
+                    oControl.data("columnKey", colConfig.columnKey);
+                } else {
+                    // Create Input for unmapped fields
+                    oControl = new Input({
+                        value: `{currentSetups>${colConfig.columnKey}}`,
+                        editable: "{currentSetups>editable}"
+                    });
+                }
+                
+                aCells.push(oControl);
+            });
+
+            const oColumnListItem = new ColumnListItem(sId, {
+                cells: aCells,
+                type: "Active"
+            });
+
+            // Attach press event for row selection
+            oColumnListItem.attachPress(this.onSetupRowSelect, this);
+
+            return oColumnListItem;
+        },
+
+        async _loadAllDropdownData() {
+            const oColumnConfig = this.getView().getModel("columnConfig").getData();
+            if (!oColumnConfig || oColumnConfig.length === 0) {
+                return;
+            }
+
+            // Get all unique table/field combinations that need data
+            const aDataToLoad = [];
+            const seenKeys = new Set();
+            
+            oColumnConfig.forEach(colConfig => {
+                if (colConfig.tableName && colConfig.fieldName) {
+                    const sCacheKey = `${colConfig.tableName}_${colConfig.fieldName}`;
+                    if (!seenKeys.has(sCacheKey) && !this._dropdownCache[sCacheKey]) {
+                        seenKeys.add(sCacheKey);
+                        aDataToLoad.push({
+                            tableName: colConfig.tableName,
+                            fieldName: colConfig.fieldName,
+                            cacheKey: sCacheKey
+                        });
+                    }
+                }
+            });
+
+            if (aDataToLoad.length === 0) {
+                // All data already cached
+                this._populateAllComboBoxes();
+                return;
+            }
+
+            // Show busy indicator
+            BusyIndicator.show(0);
+
+            try {
+                const sUrl = this.getOwnerComponent().getManifestObject().resolveUri(
+                    this.getOwnerComponent().getManifestEntry("sap.app").dataSources.tcmp.uri
+                );
+
+                // Load all data in parallel
+                const aPromises = aDataToLoad.map(async (config) => {
+                    try {
+                        const sEndpoint = `V_${config.tableName}/V_${config.tableName}`;
+                        const response = await fetch(`${sUrl}/${sEndpoint}`);
+                        
+                        if (!response.ok) {
+                            throw new Error(`Failed to fetch ${sEndpoint}`);
+                        }
+                        
+                        const data = await response.json();
+                        const aValues = data.value || [];
+                        
+                        // Extract unique values from the specified field
+                        const aFieldValues = [...new Set(aValues.map(item => item[config.fieldName]))].filter(Boolean);
+                        
+                        // Cache the field values
+                        this._dropdownCache[config.cacheKey] = aFieldValues;
+                        
+                        console.log(`Loaded ${aFieldValues.length} values for ${config.tableName}.${config.fieldName}`);
+                    } catch (error) {
+                        console.error(`Error loading ${config.tableName}.${config.fieldName}:`, error);
+                    }
+                });
+
+                await Promise.all(aPromises);
+
+                // Populate all combo boxes with loaded data
+                this._populateAllComboBoxes();
+
+            } catch (error) {
+                console.error("Error loading dropdown data:", error);
+                MessageBox.error("Failed to load dropdown options: " + error.message);
+            } finally {
+                BusyIndicator.hide();
+            }
+        },
+
+        _populateAllComboBoxes() {
+            const oTable = this.byId("currentSetupsTable");
+            if (!oTable) {
+                return;
+            }
+
+            // Get all rows in the table
+            const aItems = oTable.getItems();
+            
+            aItems.forEach(oItem => {
+                const aCells = oItem.getCells();
+                aCells.forEach(oControl => {
+                    if (oControl instanceof ComboBox) {
+                        const sTableName = oControl.data("tableName");
+                        const sFieldName = oControl.data("fieldName");
+                        
+                        if (sTableName && sFieldName) {
+                            const sCacheKey = `${sTableName}_${sFieldName}`;
+                            const aValues = this._dropdownCache[sCacheKey];
+                            
+                            if (aValues && aValues.length > 0) {
+                                // Clear existing items
+                                oControl.removeAllItems();
+                                
+                                // Add cached values
+                                aValues.forEach(value => {
+                                    oControl.addItem(new sap.ui.core.Item({
+                                        key: value,
+                                        text: value
+                                    }));
+                                });
+                            }
+                        }
+                    }
+                });
+            });
+        },
+
         async getCurrentSetups() {
             const oModel = this.getView().getModel();
             const sUrl = this.getOwnerComponent().getManifestObject().resolveUri(this.getOwnerComponent().getManifestEntry("sap.app").dataSources.mainService.uri);
@@ -1953,27 +2326,29 @@ sap.ui.define([
             return `${year}-${month}-${day}`;
         },
 
-        onAddSetup() {
+        async onAddSetup() {
+            const oColumnConfig = this.getView().getModel("columnConfig").getData();
+            if (!oColumnConfig || oColumnConfig.length === 0) {
+                MessageBox.warning("Please configure data source mappings first.");
+                return;
+            }
+
             const currentSetups = this.getView().getModel("currentSetups").getData();
             const aSetups = currentSetups || [];
 
-            // Add a new editable row
-            const oNewSetup = {
-                product: "",
-                capPercent: null,
-                term: null,
-                paymentFrequency: "",
-                dataType: "",
-                accountType: "",
-                plan: "",
-                payrollClassification: "",
-                paymentStartDate: null,
-                editable: true
-            };
+            // Create new row object with dynamic keys based on column configuration
+            const oNewSetup = { editable: true };
+            oColumnConfig.forEach(colConfig => {
+                oNewSetup[colConfig.columnKey] = "";
+            });
 
             aSetups.push(oNewSetup);
             this.getView().getModel("currentSetups").setData(aSetups);
             this.getView().getModel("currentSetups").refresh();
+            
+            // Load dropdown data after adding the row
+            await this._loadAllDropdownData();
+            
             MessageToast.show("New setup row added");
         },
 
@@ -2048,6 +2423,12 @@ sap.ui.define([
                 return;
             }
 
+            const oColumnConfig = this.getView().getModel("columnConfig").getData();
+            if (!oColumnConfig || oColumnConfig.length === 0) {
+                MessageBox.warning("Please configure data source mappings first.");
+                return;
+            }
+
             BusyIndicator.show(0);
 
             try {
@@ -2065,8 +2446,8 @@ sap.ui.define([
                     return;
                 }
 
-                // Validate required columns
-                const requiredColumns = ["Product", "Cap %", "Term", "Payment Frequency", "Payroll Classification", "Payment Start Date"];
+                // Validate required columns based on dynamic configuration
+                const requiredColumns = oColumnConfig.map(col => col.columnName);
                 const firstRow = jsonData[0];
                 const missingColumns = requiredColumns.filter(col => !(col in firstRow));
 
@@ -2076,52 +2457,29 @@ sap.ui.define([
                     return;
                 }
 
-                // Map Excel data to setup format
-                const aSetups = jsonData.map(row => ({
-                    product: row["Product"],
-                    capPercent: row["Cap %"],
-                    term: row["Term"],
-                    paymentFrequency: row["Payment Frequency"],
-                    payrollClassification: row["Payroll Classification"],
-                    paymentStartDate: this._formatDateForPicker(row["Payment Start Date"]),
-                    editable: false
-                }));
-
-                // Prepare data for backend
-                const aSetupData = aSetups.map(setup => ({
-                    product: setup.product,
-                    capPercent: setup.capPercent ? parseInt(setup.capPercent) : null,
-                    term: parseInt(setup.term),
-                    paymentFrequency: setup.paymentFrequency,
-                    dataType: "",
-                    accountType: "",
-                    plan: null,
-                    payrollClassification: setup.payrollClassification,
-                    paymentStartDate: setup.paymentStartDate
-                }));
-
-                const sUrl = this.getOwnerComponent().getManifestObject().resolveUri(this.getOwnerComponent().getManifestEntry("sap.app").dataSources.mainService.uri);
-                
-                // Call backend service to save all setups
-                const response = await fetch(`${sUrl}/saveAmortizationSetup`, {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({ setupData: aSetupData })
+                // Map Excel data to setup format dynamically
+                const aSetups = jsonData.map(row => {
+                    const oSetup = { editable: false };
+                    oColumnConfig.forEach(colConfig => {
+                        // Get value from Excel using column name
+                        let value = row[colConfig.columnName];
+                        
+                        // Handle date formatting if needed
+                        if (colConfig.columnKey.toLowerCase().includes('date') && value) {
+                            value = this._formatDateForPicker(value);
+                        }
+                        
+                        oSetup[colConfig.columnKey] = value || "";
+                    });
+                    return oSetup;
                 });
 
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
+                // Update the current setups model
+                const oCurrentSetupsModel = this.getView().getModel("currentSetups");
+                oCurrentSetupsModel.setData(aSetups);
 
-                await response.json();
-
-                MessageToast.show(`Successfully uploaded and saved ${jsonData.length} setup(s)`);
+                MessageToast.show(`Successfully uploaded ${jsonData.length} setup(s)`);
                 
-                // Refresh the current setups table
-                await this.getCurrentSetups();
-
                 // Close dialog and reset
                 this.onCloseUploadSetupDialog();
 

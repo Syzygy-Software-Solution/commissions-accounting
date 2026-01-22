@@ -61,9 +61,9 @@
                         <ComboBox 
                             width="100%"
                             selectedKey="{dataSources>fieldName}"
-                            items="{fieldNames>/}"
+                            items="{dataSources>_fieldNames}"
                             placeholder="Select field">
-                            <core:Item key="{fieldNames>COLUMN_NAME}" text="{fieldNames>COLUMN_NAME}" />
+                            <core:Item key="{dataSources>COLUMN_NAME}" text="{dataSources>COLUMN_NAME}" />
                         </ComboBox>
                         <Switch 
                             state="{dataSources>isActive}"

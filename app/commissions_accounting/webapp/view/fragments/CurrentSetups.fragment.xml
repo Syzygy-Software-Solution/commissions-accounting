@@ -2,135 +2,19 @@
     xmlns="sap.m"
     xmlns:core="sap.ui.core">
     <Table id="currentSetupsTable" 
-           items="{currentSetups>/}"
            mode="Delete"
            delete="onDeleteSetup">
         <headerToolbar>
             <OverflowToolbar>
                 <Title text="Current Setups" level="H2"/>
                 <ToolbarSpacer/>
-                <Button text="Download Setup Template" icon="sap-icon://download" press="onDownloadSetupTemplatePress" type="Ghost" />
+                <Button text="Download Template" icon="sap-icon://download" press="onDownloadSetupTemplatePress" type="Ghost" />
                 <Button id="idUpload" text="Upload" icon="sap-icon://upload" type="Ghost" press="onUploadSetups"/>
                 <Button id="addSetupBtn" text="Add" icon="sap-icon://add" press="onAddSetup"/>
-                <!-- <Button id="editSetupBtn" text="Edit" icon="sap-icon://edit" press="onEditSetup" enabled="{= ${/selectedSetupIndex} !== undefined}"/> -->
                 <Button id="saveSetupsBtn" text="Save" icon="sap-icon://save" press="onSaveSetups" type="Emphasized"/>
-
+                <Button text="" icon="sap-icon://refresh" press="onRefreshSetupTable" type="Ghost" />
             </OverflowToolbar>
         </headerToolbar>
-        <columns>
-            <Column width="20%">
-                <Text text="Product"/>
-            </Column>
-            <Column width="20%">
-                <Text text="Product Category"/>
-            </Column>
-            <Column width="20%">
-                <Text text="Commissions Category"/>
-            </Column>
-            <Column width="20%">
-                <Text text="Cap %"/>
-            </Column>
-            <Column width="30%">
-                <Text text="Term"/>
-            </Column>
-            <!-- <Column width="20%">
-                <Text text="Term"/>
-            </Column> -->
-            <Column width="20%">
-                <Text text="Amortization Frequency"/>
-            </Column>
-            <!-- <Column width="10%">
-                <Text text="Data Type"/>
-            </Column>
-            <Column width="10%">
-                <Text text="Account Type"/>
-            </Column>
-            <Column width="10%">
-                <Text text="Plan"/>
-            </Column> -->
-            <Column width="20%">
-                <Text text="Payroll Classification"/>
-            </Column>
-            <Column width="20%">
-                <Text text="Amortization Start Month"/>
-            </Column>
-        </columns>
-        <items>
-            <ColumnListItem type="Active" press="onSetupRowSelect">
-                <cells>
-                    <ComboBox
-                        selectedKey="{currentSetups>product}"
-                        editable="{currentSetups>editable}"
-                        items="{productIds>/}">
-                        <core:Item key="{productIds>PRODUCTID}" text="{productIds>PRODUCTID}"/>
-                    </ComboBox>
-                    <!-- Product Category -->
-                    <ComboBox
-                        id="idProductCategory"
-                        selectedKey="{currentSetups>productCategory}">
-                        <core:Item key="Category1" text="Category1"/>
-                        <core:Item key="Category2" text="Category2"/>
-                        <core:Item key="Category3" text="Category3"/>
-                    </ComboBox>
-                    
-                    <!-- Commissions Category -->
-                    <ComboBox
-                        id="idCommissionsCategory"
-                        selectedKey="{currentSetups>commissionsCategory}">
-                        <core:Item key="Spiff" text="Spiff"/>
-                        <core:Item key="MBO" text="MBO"/>
-                        <core:Item key="Commissions" text="Commissions"/>
-                    </ComboBox>
-                    <!-- Cap % -->
-                    <Input
-                        value="{currentSetups>capPercent}"
-                        type="Number"
-                        editable="{currentSetups>editable}"/>
-
-                    <HBox alignContent="SpaceBetween">
-                        <Input value="{currentSetups>term}" />
-                        <CheckBox textAlign="End" id="idContractTerm" text="Use Contract term ?" editable="true"></CheckBox>
-                    </HBox>
-                    
-                    <!-- <Input
-                        value="{currentSetups>term}"
-                        type="Number"
-                        editable="{currentSetups>editable}"/> -->
-                    <ComboBox
-                        selectedKey="{currentSetups>paymentFrequency}"
-                        editable="{currentSetups>editable}">
-                        <core:Item key="Monthly" text="Monthly"/>
-                        <core:Item key="Bi-Weekly" text="Bi-Weekly"/>
-                        <core:Item key="Quarterly" text="Quarterly"/>
-                    </ComboBox>
-                    <!-- <ComboBox
-                        selectedKey="{currentSetups>dataType}"
-                        editable="{currentSetups>editable}">
-                        <core:Item key="Products" text="Products"/>
-                        <core:Item key="Others" text="Others"/>
-                    </ComboBox>
-                    <ComboBox
-                        selectedKey="{currentSetups>accountType}"
-                        editable="{currentSetups>editable}">
-                        <core:Item key="FIN" text="FIN"/>
-                        <core:Item key="Others" text="Others"/>
-                    </ComboBox>
-                    <Input
-                        value="{currentSetups>plan}"
-                        editable="{currentSetups>editable}"/> -->
-                    <ComboBox
-                        selectedKey="{currentSetups>payrollClassification}"
-                        editable="{currentSetups>editable}">
-                        <core:Item key="Deferred" text="Deferred"/>
-                        <core:Item key="Non-Deferred" text="Non-Deferred"/>
-                    </ComboBox>
-                    <DatePicker
-                        value="{currentSetups>paymentStartDate}"
-                        editable="{currentSetups>editable}"
-                        valueFormat="yyyy-MM-dd"
-                        displayFormat="medium"/>
-                </cells>
-            </ColumnListItem>
-        </items>
+        <!-- Columns and items will be added dynamically via controller -->
     </Table>
 </core:FragmentDefinition>
