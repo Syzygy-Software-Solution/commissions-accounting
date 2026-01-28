@@ -73,21 +73,24 @@ sap.ui.define([
             var oColumnConfigModel = new JSONModel([]);
             this.getView().setModel(oColumnConfigModel, "columnConfig");
 
+            // Initialize cache for dropdown data and file references early
+            this._dropdownCache = {};
+            this._oSelectedFile = null;
+
+            // Load periods and data source mappings first
             await Promise.all([
-                // this.getCurrentSetups(),
                 this.getAllPeriods(),
-                // this.getAllProducts(),
                 this.getActiveDataSourceMappings()
             ]);
+            
+            // Then load current setups after column config is available
+            await this.getCurrentSetups();
+
+            // Build the dynamic setups table after data is loaded
+            await this._buildDynamicSetupsTable();
 
             // Load SheetJS library asynchronously
             this._loadSheetJS();
-            
-            // Initialize selected file reference
-            this._oSelectedFile = null;
-            
-            // Initialize cache for dropdown data (lazy loading)
-            this._dropdownCache = {};
         },
 
         _loadSheetJS() {
@@ -133,6 +136,34 @@ sap.ui.define([
         async onConfigSubSectionChange(oEvent) {
             const oSubSection = oEvent.getParameter("subSection");
             const sSectionTitle = oSubSection.getParent().getTitle();
+            
+            // Load data when navigating to Setup section
+            if (sSectionTitle === "Setup") {
+                BusyIndicator.show(0);
+                
+                try {
+                    // Always rebuild table and fetch data to ensure everything is loaded correctly
+                    await this._buildDynamicSetupsTable();
+                    
+                    // Check if data needs to be fetched
+                    const oSetupsModel = this.getView().getModel("currentSetups");
+                    const aCurrentSetups = oSetupsModel.getData();
+                    
+                    if (!aCurrentSetups || aCurrentSetups.length === 0) {
+                        // No data, fetch it
+                        await this.getCurrentSetups();
+                    } else {
+                        // Data already loaded, ensure dropdowns are populated
+                        await this._ensureDropdownDataLoaded();
+                        this._populateAllComboBoxes();
+                    }
+                } catch (error) {
+                    console.error("Error loading setup data:", error);
+                    MessageBox.error("Failed to load setup data: " + error.message);
+                } finally {
+                    BusyIndicator.hide();
+                }
+            }
             
             // Load data when navigating to Data Source Mapping section
             if (sSectionTitle === "Data Source Mapping") {
@@ -844,33 +875,25 @@ sap.ui.define([
             BusyIndicator.show(0);
 
             try {
-                // Hardcoded payee data
-                const aPayeeData = [
-                    {
-                        "payeeId": "EMP-101",
-                        "orderId": "1000234",
-                        "product": "Cloud",
-                        "totalIncentive": 12000
-                    },
-                    {
-                        "payeeId": "EMP-101",
-                        "orderId": "1000234",
-                        "product": "On-Prem",
-                        "totalIncentive": 12000
-                    },
-                    {
-                        "payeeId": "EMP-101",
-                        "orderId": "1000235",
-                        "product": "Cloud",
-                        "totalIncentive": 10000
-                    },
-                    {
-                        "payeeId": "EMP-102",
-                        "orderId": "1000236",
-                        "product": "Cloud",
-                        "totalIncentive": 15000
-                    }
-                ];
+                // Fetch payee data from API
+                const sUrl = this.getOwnerComponent().getManifestObject().resolveUri(
+                    this.getOwnerComponent().getManifestEntry("sap.app").dataSources.tcmp.uri
+                );
+                
+                const response = await fetch(`${sUrl}/SYZ_CA_AMRT_DETAIL/SYZ_CA_AMRT_DETAIL`);
+                
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch amortization data: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                const aPayeeData = data.value || [];
+                
+                if (aPayeeData.length === 0) {
+                    MessageBox.warning("No amortization data found in the system.");
+                    BusyIndicator.hide();
+                    return;
+                }
 
                 // Get current setups
                 const oSetupsModel = this.getView().getModel("currentSetups");
@@ -882,11 +905,31 @@ sap.ui.define([
                     return;
                 }
 
+                // Filter data by configured products
+                const aConfiguredProductIds = aSetups.map(setup => setup.productId);
+                const aFilteredData = aPayeeData.filter(record => 
+                    aConfiguredProductIds.includes(record.PRODUCTID)
+                );
+                const aUnconfiguredData = aPayeeData.filter(record => 
+                    !aConfiguredProductIds.includes(record.PRODUCTID)
+                );
+
+                if (aFilteredData.length === 0) {
+                    MessageBox.warning("No transactions found with configured product IDs. Please configure setups for the products in your data.");
+                    BusyIndicator.hide();
+                    return;
+                }
+
+                // Store raw API data for refresh functionality
+                const oModel = this.getView().getModel();
+                oModel.setProperty("/rawAmortizationData", aFilteredData);
+                oModel.setProperty("/unconfiguredData", aUnconfiguredData);
+
                 // Calculate amortization schedule
-                const aSchedule = this._executeAmortizationCalculation(aPayeeData, aSetups);
+                const aSchedule = this._executeAmortizationCalculation(aFilteredData, aSetups);
 
                 // Prepare overview data by combining payee data with setup details
-                const aOverview = this._prepareOverviewData(aPayeeData, aSetups);
+                const aOverview = this._prepareOverviewData(aFilteredData, aSetups);
 
                 // Update the schedule model
                 const oScheduleModel = this.getView().getModel("scheduleData");
@@ -896,7 +939,6 @@ sap.ui.define([
                 const oOverviewModel = this.getView().getModel("overviewData");
                 oOverviewModel.setData(aOverview);
                 
-                const oModel = this.getView().getModel();
                 oModel.setProperty("/scheduleOriginal", null);
                 oModel.setProperty("/overviewOriginal", null);
                 oModel.setProperty("/isFiltered", false);
@@ -956,7 +998,17 @@ sap.ui.define([
                     oOverviewPayrollClassificationFilter.setSelectedKeys([]);
                 }
 
-                MessageToast.show(`Amortization executed successfully: ${aSchedule.length} schedule entries and ${aOverview.length} overview records`);
+                let sMessage = `Amortization executed successfully: ${aSchedule.length} schedule entries and ${aOverview.length} overview records`;
+                
+                if (aUnconfiguredData.length > 0) {
+                    const aUnconfiguredProducts = [...new Set(aUnconfiguredData.map(r => r.PRODUCTID))].join(", ");
+                    MessageBox.information(
+                        `${sMessage}\n\nNote: ${aUnconfiguredData.length} transaction(s) with unconfigured product(s) were skipped: ${aUnconfiguredProducts}. Configure these products to include them.`,
+                        { title: "Amortization Complete" }
+                    );
+                } else {
+                    MessageToast.show(sMessage);
+                }
 
             } catch (error) {
                 MessageBox.error("Error executing amortization: " + error.message);
@@ -1179,28 +1231,25 @@ sap.ui.define([
         },
 
         async onRefreshSchedule() {
+            const oModel = this.getView().getModel();
             const oScheduleModel = this.getView().getModel("scheduleData");
             const oOverviewModel = this.getView().getModel("overviewData");
-            const oModel = this.getView().getModel();
 
-            // Check if there is existing schedule/overview data
-            const aCurrentSchedule = oScheduleModel.getData();
-            const aCurrentOverview = oOverviewModel.getData();
+            // Get stored raw API data
+            const aRawData = oModel.getProperty("/rawAmortizationData");
+            const aUnconfiguredData = oModel.getProperty("/unconfiguredData") || [];
 
-            if ((!aCurrentSchedule || aCurrentSchedule.length === 0) && 
-                (!aCurrentOverview || aCurrentOverview.length === 0)) {
-                MessageBox.warning("No data to refresh. Please execute amortization or upload data first.");
+            if (!aRawData || aRawData.length === 0) {
+                MessageBox.warning("No data to refresh. Please execute amortization first.");
                 return;
             }
 
             BusyIndicator.show(0);
 
             try {
-                // Get the latest setup data from database
-                const sUrl = this.getOwnerComponent().getManifestObject().resolveUri(this.getOwnerComponent().getManifestEntry("sap.app").dataSources.mainService.uri);
-                const response = await fetch(`${sUrl}/AmortizationSetups`);
-                const data = await response.json();
-                const aSetups = data.value || [];
+                // Get the latest setup data (from current setups model, not database)
+                const oSetupsModel = this.getView().getModel("currentSetups");
+                const aSetups = oSetupsModel.getData() || [];
 
                 if (aSetups.length === 0) {
                     MessageBox.warning("No setup configuration found. Please add setup data before refreshing.");
@@ -1208,45 +1257,23 @@ sap.ui.define([
                     return;
                 }
 
-                // Extract payee data from current overview (which contains the original source data)
-                let aPayeeData = [];
-                
-                if (aCurrentOverview && aCurrentOverview.length > 0) {
-                    // Build payee data from overview which has all the source information
-                    aPayeeData = aCurrentOverview.map(item => ({
-                        payeeId: item.PayeeId,
-                        orderId: item.OrderId || "",
-                        product: item.Product,
-                        totalIncentive: parseFloat(item["Total Incentive"]) || 0
-                    }));
-                } else if (aCurrentSchedule && aCurrentSchedule.length > 0) {
-                    // Fallback: Extract unique payee records from schedule
-                    const payeeMap = new Map();
-                    aCurrentSchedule.forEach(item => {
-                        const key = `${item.PayeeId}-${item.OrderId}-${item.Product}`;
-                        if (!payeeMap.has(key)) {
-                            payeeMap.set(key, {
-                                payeeId: item.PayeeId,
-                                orderId: item.OrderId || "",
-                                product: item.Product,
-                                totalIncentive: parseFloat(item["Total Incentive"]) || 0
-                            });
-                        }
-                    });
-                    aPayeeData = Array.from(payeeMap.values());
-                }
+                // Re-filter data by currently configured products (in case setup changed)
+                const aConfiguredProductIds = aSetups.map(setup => setup.productId);
+                const aFilteredData = aRawData.filter(record => 
+                    aConfiguredProductIds.includes(record.PRODUCTID)
+                );
 
-                if (aPayeeData.length === 0) {
-                    MessageBox.warning("Unable to extract payee data for refresh. Please re-execute amortization.");
+                if (aFilteredData.length === 0) {
+                    MessageBox.warning("No transactions match the current setup configuration.");
                     BusyIndicator.hide();
                     return;
                 }
 
                 // Recalculate amortization schedule with latest setup data
-                const aSchedule = this._executeAmortizationCalculation(aPayeeData, aSetups);
+                const aSchedule = this._executeAmortizationCalculation(aFilteredData, aSetups);
 
                 // Prepare overview data
-                const aOverview = this._prepareOverviewData(aPayeeData, aSetups);
+                const aOverview = this._prepareOverviewData(aFilteredData, aSetups);
 
                 // Update the schedule model
                 oScheduleModel.setData(aSchedule);
@@ -1328,32 +1355,33 @@ sap.ui.define([
 
             aPayeeData.forEach((oPayeeRecord) => {
                 try {
-                    // Find matching setup by product
-                    const oSetup = aSetups.find(setup => setup.product === oPayeeRecord.product);
+                    // Find matching setup by productId (from API: PRODUCTID)
+                    const oSetup = aSetups.find(setup => setup.productId === oPayeeRecord.PRODUCTID);
 
                     if (!oSetup) {
-                        console.warn(`No setup found for product: ${oPayeeRecord.product}. Skipping this record.`);
+                        console.warn(`No setup found for product: ${oPayeeRecord.PRODUCTID}. Skipping this record.`);
                         return;
                     }
 
                     // Extract values from payee record and setup
-                    const payeeId = oPayeeRecord.payeeId || "";
-                    const orderId = oPayeeRecord.orderId || "";
-                    const product = oPayeeRecord.product || "";
-                    const totalIncentive = parseFloat(oPayeeRecord.totalIncentive) || 0;
+                    const payeeId = oPayeeRecord.PAYEEID || "";
+                    const orderId = oPayeeRecord.ORDERID || "";
+                    const product = oPayeeRecord.PRODUCTID || "";
+                    const customer = oPayeeRecord.customer || "";
+                    const totalIncentive = parseFloat(oPayeeRecord.VALUE) || 0;
                     const capPercent = parseFloat(oSetup.capPercent) || 100;
                     const term = parseInt(oSetup.term) || 12;
-                    const payoutFreq = oSetup.paymentFrequency || "Monthly";
+                    const payoutFreq = oSetup.amortizationFrequency || "Monthly";
                     const payrollClassification = oSetup.payrollClassification || "";
 
-                    // Parse payment start date
+                    // Parse payment start date from setup (amortizationStartMonth)
                     let paymentStartDate;
-                    if (oSetup.paymentStartDate) {
+                    if (oSetup.amortizationStartMonth) {
                         // Handle Excel date serial number or string date
-                        if (typeof oSetup.paymentStartDate === "number") {
-                            paymentStartDate = this._excelDateToJSDate(oSetup.paymentStartDate);
+                        if (typeof oSetup.amortizationStartMonth === "number") {
+                            paymentStartDate = this._excelDateToJSDate(oSetup.amortizationStartMonth);
                         } else {
-                            paymentStartDate = new Date(oSetup.paymentStartDate);
+                            paymentStartDate = new Date(oSetup.amortizationStartMonth);
                         }
                     } else {
                         paymentStartDate = new Date();
@@ -1368,6 +1396,7 @@ sap.ui.define([
                             PayeeId: payeeId,
                             OrderId: orderId,
                             Product: product,
+                            Customer: customer,
                             "Total Incentive": this._formatCurrency(paymentAmount),
                             "Cap %": capPercent,
                             Term: 0,
@@ -1386,8 +1415,6 @@ sap.ui.define([
                         const freqMonths = {
                             "Monthly": 1,
                             "Quarterly": 3,
-                            "Bi-Weekly": 2,
-                            "Semi-Annually": 6,
                             "Annually": 12
                         }[payoutFreq] || 1;
 
@@ -1404,11 +1431,12 @@ sap.ui.define([
                                 PayeeId: payeeId,
                                 OrderId: orderId,
                                 Product: product,
+                                Customer: customer,
                                 "Total Incentive": this._formatCurrency(paymentAmount),
                                 "Cap %": capPercent,
                                 Term: term,
                                 "Payment Frequency": payoutFreq,
-                                "Payment Start Date": this._formatDate(paymentStartDate),
+                                "Payment Start Date": this._formatDate(currentDate),
                                 Plan: "",
                                 "Data Type": "",
                                 "Data Type Name": "",
@@ -1434,21 +1462,21 @@ sap.ui.define([
 
             aPayeeData.forEach((oPayeeRecord) => {
                 try {
-                    // Find matching setup by product
-                    const oSetup = aSetups.find(setup => setup.product === oPayeeRecord.product);
+                    // Find matching setup by productId
+                    const oSetup = aSetups.find(setup => setup.productId === oPayeeRecord.PRODUCTID);
 
                     if (!oSetup) {
-                        console.warn(`No setup found for product: ${oPayeeRecord.product}. Skipping this record.`);
+                        console.warn(`No setup found for product: ${oPayeeRecord.PRODUCTID}. Skipping this record.`);
                         return;
                     }
 
-                    // Parse payment start date
+                    // Parse payment start date from setup (amortizationStartMonth)
                     let paymentStartDate;
-                    if (oSetup.paymentStartDate) {
-                        if (typeof oSetup.paymentStartDate === "number") {
-                            paymentStartDate = this._excelDateToJSDate(oSetup.paymentStartDate);
+                    if (oSetup.amortizationStartMonth) {
+                        if (typeof oSetup.amortizationStartMonth === "number") {
+                            paymentStartDate = this._excelDateToJSDate(oSetup.amortizationStartMonth);
                         } else {
-                            paymentStartDate = new Date(oSetup.paymentStartDate);
+                            paymentStartDate = new Date(oSetup.amortizationStartMonth);
                         }
                     } else {
                         paymentStartDate = new Date();
@@ -1456,13 +1484,14 @@ sap.ui.define([
 
                     // Create overview record with combined data
                     aOverview.push({
-                        PayeeId: oPayeeRecord.payeeId || "",
-                        OrderId: oPayeeRecord.orderId || "",
-                        Product: oPayeeRecord.product || "",
-                        "Total Incentive": this._formatCurrency(oPayeeRecord.totalIncentive || 0),
+                        PayeeId: oPayeeRecord.PAYEEID || "",
+                        OrderId: oPayeeRecord.ORDERID || "",
+                        Product: oPayeeRecord.PRODUCTID || "",
+                        Customer: oPayeeRecord.customer || "",
+                        "Total Incentive": this._formatCurrency(oPayeeRecord.VALUE || 0),
                         "Cap %": parseFloat(oSetup.capPercent) || 100,
                         Term: parseInt(oSetup.term) || 12,
-                        "Payment Frequency": oSetup.paymentFrequency || "Monthly",
+                        "Payment Frequency": oSetup.amortizationFrequency || "Monthly",
                         "Payment Start Date": this._formatDate(paymentStartDate),
                         Plan: "",
                         "Data Type": "",
@@ -1869,19 +1898,21 @@ sap.ui.define([
                 // Get OData V4 model
                 const oODataModel = this.getView().getModel();
 
-                // Prepare payload
+                // Prepare payload - mapping to new schema fields
                 const oPayload = {
-                    product: sProduct,
-                    // incentiveAmount: fTotalIncentive,
+                    productId: sProduct,
+                    productCategory: "", // Not in current form, set to empty
+                    commissionsCategory: "", // Not in current form, set to empty
                     capPercent: 0, // Default value as it's not in the form
                     term: iTerm,
-                    paymentFrequency: sPaymentFrequency,
-                    dataType: sDataType,
-                    accountType: sAccountType,
-                    plan: sPlan || "",
+                    amortizationFrequency: sPaymentFrequency,
                     payrollClassification: sPayrollClassification,
-                    paymentStartDate: sExpenseStartDate
-                    // paymentEndDate: sExpenseEndDate
+                    amortizationStartMonth: sExpenseStartDate,
+                    genericAttribute1: "",
+                    genericNumber1: null,
+                    genericNumber2: null,
+                    genericBoolean1: false,
+                    genericDate1: null
                 };
 
                 const sUrl = this.getOwnerComponent().getManifestObject().resolveUri(this.getOwnerComponent().getManifestEntry("sap.app").dataSources.mainService.uri);
@@ -2019,7 +2050,7 @@ sap.ui.define([
             }
         },
 
-        _buildDynamicSetupsTable() {
+        async _buildDynamicSetupsTable() {
             const oColumnConfig = this.getView().getModel("columnConfig").getData();
             const oTable = this.byId("currentSetupsTable");
             
@@ -2027,6 +2058,9 @@ sap.ui.define([
                 console.warn("Cannot build dynamic table: table or column config not available");
                 return;
             }
+
+            // Ensure dropdown data is loaded before building the table
+            await this._ensureDropdownDataLoaded();
 
             // Remove existing columns
             oTable.removeAllColumns();
@@ -2048,19 +2082,22 @@ sap.ui.define([
                 factory: this._createSetupRowFactory.bind(this)
             });
 
+            // Populate dropdowns after table is built
+            this._populateAllComboBoxes();
+
             console.log(`Dynamic table built with ${oColumnConfig.length} columns`);
         },
 
         async onRefreshSetupTable() {
             BusyIndicator.show(0);
             try {
-                // Refetch data source mappings
-                await this.getActiveDataSourceMappings();
+                // Refetch current setups data
+                await this.getCurrentSetups();
                 
-                // Rebuild the table with new configuration
-                this._buildDynamicSetupsTable();
+                // Ensure dropdowns are populated (data already cached)
+                this._populateAllComboBoxes();
                 
-                MessageToast.show("Setup table refreshed with latest configuration");
+                MessageToast.show("Setup table refreshed successfully");
             } catch (error) {
                 console.error("Error refreshing setup table:", error);
                 MessageBox.error("Failed to refresh table: " + error.message);
@@ -2075,28 +2112,71 @@ sap.ui.define([
 
             // Create cells based on column configuration
             oColumnConfig.forEach(colConfig => {
-                // Check if this field is mapped to a table and field
-                const bIsMapped = colConfig.tableName && colConfig.fieldName;
-                
                 let oControl;
-                if (bIsMapped) {
-                    // Create ComboBox for mapped fields
+                
+                // Special handling for payrollClassification - hardcoded values
+                if (colConfig.columnKey === "payrollClassification") {
                     oControl = new ComboBox({
                         selectedKey: `{currentSetups>${colConfig.columnKey}}`,
                         editable: "{currentSetups>editable}",
-                        placeholder: `Select ${colConfig.columnName}`
+                        placeholder: `Select ${colConfig.columnName}`,
+                        items: [
+                            new sap.ui.core.Item({ key: "Deferred", text: "Deferred" }),
+                            new sap.ui.core.Item({ key: "Non Deferred", text: "Non Deferred" })
+                        ]
                     });
+                } else if (colConfig.columnKey === "amortizationFrequency") {
+                    // Check if this field is mapped to a table and field
+                    const bIsMapped = colConfig.tableName && colConfig.fieldName;
                     
-                    // Store metadata for identifying the combo box
-                    oControl.data("tableName", colConfig.tableName);
-                    oControl.data("fieldName", colConfig.fieldName);
-                    oControl.data("columnKey", colConfig.columnKey);
+                    if (bIsMapped) {
+                        // Create ComboBox for mapped fields - will be populated from data source
+                        oControl = new ComboBox({
+                            selectedKey: `{currentSetups>${colConfig.columnKey}}`,
+                            editable: "{currentSetups>editable}",
+                            placeholder: `Select ${colConfig.columnName}`
+                        });
+                        
+                        // Store metadata for identifying the combo box
+                        oControl.data("tableName", colConfig.tableName);
+                        oControl.data("fieldName", colConfig.fieldName);
+                        oControl.data("columnKey", colConfig.columnKey);
+                    } else {
+                        // Not mapped - use hardcoded values
+                        oControl = new ComboBox({
+                            selectedKey: `{currentSetups>${colConfig.columnKey}}`,
+                            editable: "{currentSetups>editable}",
+                            placeholder: `Select ${colConfig.columnName}`,
+                            items: [
+                                new sap.ui.core.Item({ key: "Monthly", text: "Monthly" }),
+                                new sap.ui.core.Item({ key: "Quarterly", text: "Quarterly" }),
+                                new sap.ui.core.Item({ key: "Annually", text: "Annually" })
+                            ]
+                        });
+                    }
                 } else {
-                    // Create Input for unmapped fields
-                    oControl = new Input({
-                        value: `{currentSetups>${colConfig.columnKey}}`,
-                        editable: "{currentSetups>editable}"
-                    });
+                    // Check if this field is mapped to a table and field
+                    const bIsMapped = colConfig.tableName && colConfig.fieldName;
+                    
+                    if (bIsMapped) {
+                        // Create ComboBox for mapped fields
+                        oControl = new ComboBox({
+                            selectedKey: `{currentSetups>${colConfig.columnKey}}`,
+                            editable: "{currentSetups>editable}",
+                            placeholder: `Select ${colConfig.columnName}`
+                        });
+                        
+                        // Store metadata for identifying the combo box
+                        oControl.data("tableName", colConfig.tableName);
+                        oControl.data("fieldName", colConfig.fieldName);
+                        oControl.data("columnKey", colConfig.columnKey);
+                    } else {
+                        // Create Input for unmapped fields
+                        oControl = new Input({
+                            value: `{currentSetups>${colConfig.columnKey}}`,
+                            editable: "{currentSetups>editable}"
+                        });
+                    }
                 }
                 
                 aCells.push(oControl);
@@ -2111,6 +2191,39 @@ sap.ui.define([
             oColumnListItem.attachPress(this.onSetupRowSelect, this);
 
             return oColumnListItem;
+        },
+
+        async _ensureDropdownDataLoaded() {
+            const oColumnConfig = this.getView().getModel("columnConfig").getData();
+            if (!oColumnConfig || oColumnConfig.length === 0) {
+                return;
+            }
+            
+            // Check if data is already cached
+            const aDataToLoad = [];
+            const seenKeys = new Set();
+            
+            oColumnConfig.forEach(colConfig => {
+                if (colConfig.tableName && colConfig.fieldName) {
+                    const sCacheKey = `${colConfig.tableName}_${colConfig.fieldName}`;
+                    if (!seenKeys.has(sCacheKey) && !this._dropdownCache[sCacheKey]) {
+                        seenKeys.add(sCacheKey);
+                        aDataToLoad.push({
+                            tableName: colConfig.tableName,
+                            fieldName: colConfig.fieldName,
+                            cacheKey: sCacheKey
+                        });
+                    }
+                }
+            });
+            
+            if (aDataToLoad.length === 0) {
+                // All data already cached
+                return;
+            }
+            
+            // Load missing data
+            await this._loadAllDropdownData();
         },
 
         async _loadAllDropdownData() {
@@ -2230,28 +2343,35 @@ sap.ui.define([
         async getCurrentSetups() {
             const oModel = this.getView().getModel();
             const sUrl = this.getOwnerComponent().getManifestObject().resolveUri(this.getOwnerComponent().getManifestEntry("sap.app").dataSources.mainService.uri);
+            
+            BusyIndicator.show(0);
+            
             try {
-                fetch(`${sUrl}/AmortizationSetups`, {
+                const response = await fetch(`${sUrl}/AmortizationSetups`, {
                     method: "GET",
                     headers: {
                         "Content-Type": "application/json"
                     }
-                })
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error("Network response was not ok");
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    this.getView().getModel("currentSetups").setData(data.value || []);
-                })
-                .catch(error => {
-                    MessageBox.error("Error fetching current setups: " + error.message);
-                    console.error("Error fetching current setups:", error);
                 });
+                
+                if (!response.ok) {
+                    throw new Error("Network response was not ok");
+                }
+                
+                const data = await response.json();
+                this.getView().getModel("currentSetups").setData(data.value || []);
+                
+                // Ensure dropdown data is loaded before populating combo boxes
+                await this._ensureDropdownDataLoaded();
+                
+                // Populate combo boxes after data is loaded
+                this._populateAllComboBoxes();
+                
             } catch (error) {
                 MessageBox.error("Error fetching current setups: " + error.message);
+                console.error("Error fetching current setups:", error);
+            } finally {
+                BusyIndicator.hide();
             }
         },
 
@@ -2327,29 +2447,41 @@ sap.ui.define([
         },
 
         async onAddSetup() {
-            const oColumnConfig = this.getView().getModel("columnConfig").getData();
-            if (!oColumnConfig || oColumnConfig.length === 0) {
-                MessageBox.warning("Please configure data source mappings first.");
-                return;
+            BusyIndicator.show(0);
+            
+            try {
+                const oColumnConfig = this.getView().getModel("columnConfig").getData();
+                if (!oColumnConfig || oColumnConfig.length === 0) {
+                    MessageBox.warning("Please configure data source mappings first.");
+                    BusyIndicator.hide();
+                    return;
+                }
+
+                // Ensure dropdown data is loaded
+                await this._ensureDropdownDataLoaded();
+
+                const currentSetups = this.getView().getModel("currentSetups").getData();
+                const aSetups = currentSetups || [];
+
+                // Create new row object with dynamic keys based on column configuration
+                const oNewSetup = { editable: true };
+                oColumnConfig.forEach(colConfig => {
+                    oNewSetup[colConfig.columnKey] = "";
+                });
+
+                aSetups.push(oNewSetup);
+                this.getView().getModel("currentSetups").setData(aSetups);
+                this.getView().getModel("currentSetups").refresh();
+                
+                // Populate the new combo boxes
+                this._populateAllComboBoxes();
+                
+                MessageToast.show("New setup row added");
+            } catch (error) {
+                MessageBox.error("Failed to add new setup: " + error.message);
+            } finally {
+                BusyIndicator.hide();
             }
-
-            const currentSetups = this.getView().getModel("currentSetups").getData();
-            const aSetups = currentSetups || [];
-
-            // Create new row object with dynamic keys based on column configuration
-            const oNewSetup = { editable: true };
-            oColumnConfig.forEach(colConfig => {
-                oNewSetup[colConfig.columnKey] = "";
-            });
-
-            aSetups.push(oNewSetup);
-            this.getView().getModel("currentSetups").setData(aSetups);
-            this.getView().getModel("currentSetups").refresh();
-            
-            // Load dropdown data after adding the row
-            await this._loadAllDropdownData();
-            
-            MessageToast.show("New setup row added");
         },
 
         onSetupRowSelect(oEvent) {
@@ -2508,7 +2640,7 @@ sap.ui.define([
             const oItem = oEvent.getParameter("listItem");
             const oContext = oItem.getBindingContext("currentSetups");
             const oSetup = oContext.getObject();
-            const sProduct = oSetup.product;
+            const sProduct = oSetup.productId || oSetup.product;
 
             // Show confirmation dialog
             MessageBox.confirm(`Are you sure you want to delete the setup for this product: ${sProduct}?`, {
@@ -2528,7 +2660,7 @@ sap.ui.define([
                                 headers: {
                                     "Content-Type": "application/json"
                                 },
-                                body: JSON.stringify({ product: sProduct })
+                                body: JSON.stringify({ productId: sProduct })
                             });
 
                             if (!response.ok) {
@@ -2547,6 +2679,9 @@ sap.ui.define([
                                 oModel.setData(aSetups);
                                 oModel.refresh();
                             }
+
+                            // Ensure dropdowns are repopulated after deletion
+                            this._populateAllComboBoxes();
 
                             MessageToast.show(`Setup for product "${sProduct}" deleted successfully`);
                         } catch (error) {
@@ -2604,17 +2739,21 @@ sap.ui.define([
             BusyIndicator.show(0);
 
             try {
-                // Prepare data for backend
+                // Prepare data for backend - mapping to new schema fields
                 const aSetupData = aSetups.map(setup => ({
-                    product: setup.product,
+                    productId: setup.productId || setup.product,
+                    productCategory: setup.productCategory || "",
+                    commissionsCategory: setup.commissionsCategory || "",
                     capPercent: setup.capPercent ? parseInt(setup.capPercent) : null,
-                    term: parseInt(setup.term),
-                    paymentFrequency: setup.paymentFrequency,
-                    dataType: setup.dataType,
-                    accountType: setup.accountType,
-                    plan: setup.plan || null,
-                    payrollClassification: setup.payrollClassification,
-                    paymentStartDate: setup.paymentStartDate
+                    term: setup.term ? parseInt(setup.term) : null,
+                    amortizationFrequency: setup.amortizationFrequency || setup.paymentFrequency || "",
+                    payrollClassification: setup.payrollClassification || "",
+                    amortizationStartMonth: setup.amortizationStartMonth || setup.paymentStartDate || "",
+                    genericAttribute1: setup.genericAttribute1 || "",
+                    genericNumber1: setup.genericNumber1 ? parseInt(setup.genericNumber1) : null,
+                    genericNumber2: setup.genericNumber2 ? parseInt(setup.genericNumber2) : null,
+                    genericBoolean1: setup.genericBoolean1 || false,
+                    genericDate1: setup.genericDate1 || null
                 }));
                 const sUrl = this.getOwnerComponent().getManifestObject().resolveUri(this.getOwnerComponent().getManifestEntry("sap.app").dataSources.mainService.uri);
                 // Call backend service

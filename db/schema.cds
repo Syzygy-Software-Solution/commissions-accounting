@@ -2,15 +2,19 @@ namespace sz;
 using { cuid, managed } from '@sap/cds/common';
 
 entity AmortizationSetup: cuid, managed{
-    product: String;
+    productId: String;
+    productCategory: String;
+    commissionsCategory: String;
     capPercent: Integer;
     term: Integer;
-    paymentFrequency: String;
-    dataType: String;
-    accountType: String;
-    plan: String;
+    amortizationFrequency: String;
     payrollClassification: String;
-    paymentStartDate: Date;
+    amortizationStartMonth: String;
+    genericAttribute1: String;
+    genericNumber1: Integer;
+    genericNumber2: Integer;
+    genericBoolean1: Boolean;
+    genericDate1: Date;
 }
 
 entity AmortizationSchedule: cuid, managed{

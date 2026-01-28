@@ -8,15 +8,19 @@ service AmortizationService {
     entity DataSourceMappings as projection on sz.DataSourceMappings;
 
     type SetupInput: {
-        product: String;
+        productId: String;
+        productCategory: String;
+        commissionsCategory: String;
         capPercent: Integer;
         term: Integer;
-        paymentFrequency: String;
-        dataType: String;
-        accountType: String;
-        plan: String;
+        amortizationFrequency: String;
         payrollClassification: String;
-        paymentStartDate: Date;
+        amortizationStartMonth: String;
+        genericAttribute1: String;
+        genericNumber1: Integer;
+        genericNumber2: Integer;
+        genericBoolean1: Boolean;
+        genericDate1: Date;
     }
 
     type MappingInput: {
@@ -32,6 +36,6 @@ service AmortizationService {
     }
 
     action saveAmortizationSetup(setupData: array of SetupInput) returns String;
-    action deleteAmortizationSetupByProduct(product: String) returns Boolean;
+    action deleteAmortizationSetupByProduct(productId: String) returns Boolean;
     action saveDataSourceMappings(mappingData: array of MappingInput) returns String;
 }

@@ -24,11 +24,11 @@ module.exports = cds.service.impl(async(srv) => {
 
     srv.on('deleteAmortizationSetupByProduct', async (req) => {
         console.log('deleteAmortizationSetupByProduct called');
-        const deletionProduct = req.data.product;
+        const deletionProduct = req.data.productId;
         console.log('Received setup data:', deletionProduct);
         let updatedData = [];
         try {
-            await db.run(DELETE.from('sz.AmortizationSetup').where({ product: deletionProduct }));
+            await db.run(DELETE.from('sz.AmortizationSetup').where({ productId: deletionProduct }));
             console.log('Existing AmortizationSetup entries deleted.');
             updatedData = await db.run(SELECT.from('sz.AmortizationSetup'));
         } catch (error) {

@@ -8,6 +8,9 @@ default-*.json
 gen/
 node_modules/
 target/
+env/
+dist/
+app/commissions_accounting/dist/
 
 # Web IDE, App Studio
 .che/
