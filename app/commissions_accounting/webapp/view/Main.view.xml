@@ -32,7 +32,7 @@
         <tnt:mainContents>
             <NavContainer id="idNavContainer" initialPage="amortizationDetails" class="sapUiContentPadding">
                 <pages>
-                    <uxap:ObjectPageLayout id="amortizationDetails" useIconTabBar="true">
+                    <uxap:ObjectPageLayout id="amortizationDetails" useIconTabBar="true" headerContentPinnable="false" alwaysShowContentHeader="true">
                         <uxap:headerTitle>
                             <uxap:ObjectPageDynamicHeaderTitle>
                                 <uxap:expandedHeading>
@@ -62,6 +62,10 @@
                                 </uxap:actions>
                             </uxap:ObjectPageDynamicHeaderTitle>
                         </uxap:headerTitle>
+
+                        <uxap:headerContent>
+                            <Label text="Execute amortization calculations to generate payment schedules from commission data. View the Amortization Schedule for period-wise breakdowns and the Overview for consolidated commission records." />
+                        </uxap:headerContent>
 
                         <uxap:sections>
                             <uxap:ObjectPageSection title="Amortization Schedule" titleUppercase="false">
@@ -277,7 +281,7 @@
                         </uxap:sections>
                     </uxap:ObjectPageLayout>
 
-                    <uxap:ObjectPageLayout id="configAmortization" useIconTabBar="true" subSectionLayout="TitleOnLeft" navigate="onConfigSubSectionChange">
+                    <uxap:ObjectPageLayout id="configAmortization" useIconTabBar="true" subSectionLayout="TitleOnLeft" navigate="onConfigSubSectionChange" headerContentPinnable="false" alwaysShowContentHeader="true">
                         <uxap:headerTitle>
                             <uxap:ObjectPageDynamicHeaderTitle>
                                 <uxap:expandedHeading>
@@ -294,6 +298,10 @@
                                 </uxap:snappedHeading>
                             </uxap:ObjectPageDynamicHeaderTitle>
                         </uxap:headerTitle>
+
+                        <uxap:headerContent>
+                            <Label text="Set up amortization parameters for each product and define how commission data flows into the system. Use the Setup section to manage calculation rules and the Data Source Mapping section to configure field connections." />
+                        </uxap:headerContent>
 
                         <uxap:sections>
                             <uxap:ObjectPageSection title="Setup" titleUppercase="false">
