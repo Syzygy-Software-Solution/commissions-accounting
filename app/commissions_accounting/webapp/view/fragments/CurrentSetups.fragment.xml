@@ -6,7 +6,7 @@
            delete="onDeleteSetup">
         <headerToolbar>
             <OverflowToolbar>
-                <Title text="Current Setups" level="H2"/>
+                <Title text="Current Setups ({= ${currentSetups>/}.length })" level="H2"/>
                 <ToolbarSpacer/>
                 <Button text="Download Template" icon="sap-icon://download" press="onDownloadSetupTemplatePress" type="Ghost" />
                 <Button id="idUpload" text="Upload" icon="sap-icon://upload" type="Ghost" press="onUploadSetups"/>

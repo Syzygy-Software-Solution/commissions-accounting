@@ -44,6 +44,38 @@ sap.ui.define([
             var oProductIdsModel = new JSONModel([]);
             this.getView().setModel(oProductIdsModel, "productIds");
 
+            // Summary section models
+            var oSummaryModel = new JSONModel([]);
+            this.getView().setModel(oSummaryModel, "summaryData");
+
+            var oSummaryTotalsModel = new JSONModel({ totalAmount: "$0.00" });
+            this.getView().setModel(oSummaryTotalsModel, "summaryTotals");
+
+            var oSummaryColumnsModel = new JSONModel({
+                showPayeeId: true,
+                showOrderId: true,
+                showCustomer: true,
+                showProduct: true,
+                showCapPercent: true,
+                showTerm: true,
+                showFrequency: true,
+                showPayrollClassification: true,
+                showRecordCount: true
+            });
+            this.getView().setModel(oSummaryColumnsModel, "summaryColumns");
+
+            // Chart section models
+            var oChartDataModel = new JSONModel([]);
+            this.getView().setModel(oChartDataModel, "chartData");
+
+            var oChartConfigModel = new JSONModel({
+                chartType: "column",
+                dimension: "PayeeId",
+                measure: "Amount",
+                topN: "10"
+            });
+            this.getView().setModel(oChartConfigModel, "chartConfig");
+
             // Hardcoded data - commented out, now fetching from database
             // var oDataSourceModel = new JSONModel([
             //     { columnKey: "productId", columnName: "Product Id", defaultLabel: "Product Id", customLabel: "", tableName: "", fieldName: "", isActive: true },
@@ -89,8 +121,25 @@ sap.ui.define([
             // Build the dynamic setups table after data is loaded
             await this._buildDynamicSetupsTable();
 
-            // Load SheetJS library asynchronously
+            // Load SheetJS and Chart.js libraries asynchronously
             this._loadSheetJS();
+            this._loadChartJS();
+        },
+
+        _loadChartJS() {
+            // Load Chart.js from CDN
+            if (!window.Chart) {
+                const script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';
+                script.async = true;
+                script.onload = () => {
+                    console.log('Chart.js loaded successfully');
+                };
+                script.onerror = () => {
+                    console.error('Failed to load Chart.js library');
+                };
+                document.head.appendChild(script);
+            }
         },
 
         _loadSheetJS() {
@@ -844,6 +893,215 @@ sap.ui.define([
             }
         },
 
+        /**
+         * Generates Excel workbook data from schedule and/or overview data
+         * @param {string} sDataType - 'schedule', 'overview', or 'both'
+         * @returns {Object} - Object with workbook, filename, and base64 data
+         */
+        _generateExcelData(sDataType) {
+            const oScheduleModel = this.getView().getModel("scheduleData");
+            const oOverviewModel = this.getView().getModel("overviewData");
+            const aScheduleData = oScheduleModel.getData() || [];
+            const aOverviewData = oOverviewModel.getData() || [];
+            
+            const wb = XLSX.utils.book_new();
+            const currentDate = new Date().toISOString().split('T')[0];
+            let filename = "";
+            
+            if (sDataType === "schedule" || sDataType === "both") {
+                if (aScheduleData.length > 0) {
+                    const wsSchedule = XLSX.utils.json_to_sheet(aScheduleData);
+                    wsSchedule['!cols'] = [
+                        { wch: 15 }, { wch: 15 }, { wch: 18 }, { wch: 18 },
+                        { wch: 15 }, { wch: 10 }, { wch: 10 }, { wch: 20 },
+                        { wch: 18 }, { wch: 20 }, { wch: 18 }, { wch: 18 }, { wch: 30 }
+                    ];
+                    XLSX.utils.book_append_sheet(wb, wsSchedule, "Amortization Schedule");
+                }
+            }
+            
+            if (sDataType === "overview" || sDataType === "both") {
+                if (aOverviewData.length > 0) {
+                    const wsOverview = XLSX.utils.json_to_sheet(aOverviewData);
+                    wsOverview['!cols'] = [
+                        { wch: 15 }, { wch: 18 }, { wch: 18 }, { wch: 15 },
+                        { wch: 10 }, { wch: 10 }, { wch: 20 }, { wch: 18 },
+                        { wch: 20 }, { wch: 18 }, { wch: 18 }, { wch: 30 }
+                    ];
+                    XLSX.utils.book_append_sheet(wb, wsOverview, "Overview");
+                }
+            }
+            
+            // Generate filename based on data type
+            if (sDataType === "both") {
+                filename = `Amortization_Data_${currentDate}.xlsx`;
+            } else if (sDataType === "schedule") {
+                filename = `Amortization_Schedule_${currentDate}.xlsx`;
+            } else {
+                filename = `Amortization_Overview_${currentDate}.xlsx`;
+            }
+            
+            // Generate base64 data for attachment
+            const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
+            
+            return {
+                workbook: wb,
+                filename: filename,
+                base64Data: wbout,
+                recordCount: sDataType === "both" 
+                    ? aScheduleData.length + aOverviewData.length 
+                    : (sDataType === "schedule" ? aScheduleData.length : aOverviewData.length)
+            };
+        },
+
+        async onSharePress() {
+            const oScheduleModel = this.getView().getModel("scheduleData");
+            const oOverviewModel = this.getView().getModel("overviewData");
+            const aScheduleData = oScheduleModel.getData() || [];
+            const aOverviewData = oOverviewModel.getData() || [];
+            
+            // Check if there's any data to share
+            if (aScheduleData.length === 0 && aOverviewData.length === 0) {
+                MessageBox.warning("No data available to share. Please execute amortization first.");
+                return;
+            }
+            
+            // Load and open the share dialog
+            if (!this._pShareDialog) {
+                this._pShareDialog = Fragment.load({
+                    id: this.getView().getId(),
+                    name: "commissionsaccounting.view.fragments.ShareDialog",
+                    controller: this
+                }).then((oDialog) => {
+                    this.getView().addDependent(oDialog);
+                    return oDialog;
+                });
+            }
+            
+            const oDialog = await this._pShareDialog;
+            
+            // Set up dialog model for data availability
+            const oModel = this.getView().getModel();
+            oModel.setProperty("/hasScheduleData", aScheduleData.length > 0);
+            oModel.setProperty("/hasOverviewData", aOverviewData.length > 0);
+            oModel.setProperty("/isEmailValid", false);
+            
+            // Reset form fields
+            const oEmailInput = this.byId("shareEmailInput");
+            const oSubjectInput = this.byId("shareSubjectInput");
+            const oMessageInput = this.byId("shareMessageInput");
+            const oRadioGroup = this.byId("shareDataTypeGroup");
+            
+            if (oEmailInput) oEmailInput.setValue("");
+            if (oSubjectInput) oSubjectInput.setValue("");
+            if (oMessageInput) oMessageInput.setValue("");
+            if (oRadioGroup) oRadioGroup.setSelectedIndex(0);
+            
+            oDialog.open();
+        },
+
+        onShareEmailChange(oEvent) {
+            const sEmail = oEvent.getParameter("value");
+            const oModel = this.getView().getModel();
+            
+            // Simple email validation
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            const bIsValid = emailRegex.test(sEmail);
+            
+            oModel.setProperty("/isEmailValid", bIsValid);
+            
+            // Update input value state
+            const oInput = oEvent.getSource();
+            if (sEmail && !bIsValid) {
+                oInput.setValueState("Error");
+                oInput.setValueStateText("Please enter a valid email address");
+            } else {
+                oInput.setValueState("None");
+            }
+        },
+
+        async onSendShareEmail() {
+            // Check if XLSX library is loaded
+            if (!window.XLSX) {
+                MessageBox.error("Excel processing library is still loading. Please try again in a moment.");
+                return;
+            }
+            
+            const oEmailInput = this.byId("shareEmailInput");
+            const oSubjectInput = this.byId("shareSubjectInput");
+            const oMessageInput = this.byId("shareMessageInput");
+            const oRadioGroup = this.byId("shareDataTypeGroup");
+            
+            const sEmail = oEmailInput.getValue().trim();
+            const sSubject = oSubjectInput.getValue().trim() || "Amortization Data Export";
+            const sMessage = oMessageInput.getValue().trim() || "Please find the attached amortization data.";
+            
+            // Determine which data to send based on radio selection
+            const iSelectedIndex = oRadioGroup.getSelectedIndex();
+            let sDataType;
+            switch (iSelectedIndex) {
+                case 0: sDataType = "schedule"; break;
+                case 1: sDataType = "overview"; break;
+                case 2: sDataType = "both"; break;
+                default: sDataType = "schedule";
+            }
+            
+            BusyIndicator.show(0);
+            
+            try {
+                // Generate Excel data using shared method
+                const oExcelData = this._generateExcelData(sDataType);
+                
+                // Prepare email payload
+                const oEmailPayload = {
+                    to: sEmail,
+                    subject: sSubject,
+                    body: sMessage,
+                    attachment: {
+                        filename: oExcelData.filename,
+                        content: oExcelData.base64Data,
+                        contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    }
+                };
+                
+                // Call backend service to send email
+                const sServiceUrl = this.getOwnerComponent().getManifestObject().resolveUri(
+                    this.getOwnerComponent().getManifestEntry("sap.app").dataSources.mainService.uri
+                );
+                
+                const response = await fetch(`${sServiceUrl}/sendEmail`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify(oEmailPayload)
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.error?.message || `Failed to send email: ${response.status}`);
+                }
+                
+                MessageToast.show(`Email sent successfully to ${sEmail}`);
+                this.onCloseShareDialog();
+                
+            } catch (error) {
+                console.error("Error sending email:", error);
+                MessageBox.error(
+                    `Failed to send email: ${error.message}\n\nPlease ensure the mail destination is configured correctly on BTP.`,
+                    { title: "Email Error" }
+                );
+            } finally {
+                BusyIndicator.hide();
+            }
+        },
+
+        onCloseShareDialog() {
+            this._pShareDialog.then((oDialog) => {
+                oDialog.close();
+            });
+        },
+
         _excelDateToJSDate(excelDate) {
             // Excel stores dates as days since 1900-01-01 (with a leap year bug for 1900)
             const millisecondsPerDay = 24 * 60 * 60 * 1000;
@@ -873,14 +1131,20 @@ sap.ui.define([
 
         async onExecuteAmortizationPress() {
             BusyIndicator.show(0);
-
+            const periodSeq = this.getView().getModel("periodsData").getData().filter(p => p.NAME === this.getView().byId("periodsComboBox").getSelectedKey())[0]?.PERIODSEQ;
+            if (!periodSeq) {
+                MessageBox.warning("Please select a valid period before executing amortization.");
+                BusyIndicator.hide();
+                return;
+            }
             try {
                 // Fetch payee data from API
                 const sUrl = this.getOwnerComponent().getManifestObject().resolveUri(
                     this.getOwnerComponent().getManifestEntry("sap.app").dataSources.tcmp.uri
                 );
                 
-                const response = await fetch(`${sUrl}/SYZ_CA_AMRT_DETAIL/SYZ_CA_AMRT_DETAIL`);
+                // const response = await fetch(`${sUrl}/SYZ_CA_AMRT_DETAIL/SYZ_CA_AMRT_DETAIL`);
+                const response = await fetch(`${sUrl}/SYZ_CA_AMRT_DETAIL/SYZ_CA_AMRT_DETAIL?$filter=PERIODSEQ eq ${periodSeq}`);
                 
                 if (!response.ok) {
                     throw new Error(`Failed to fetch amortization data: ${response.status}`);
@@ -933,10 +1197,12 @@ sap.ui.define([
 
                 // Update the schedule model
                 const oScheduleModel = this.getView().getModel("scheduleData");
+                oScheduleModel.setSizeLimit(aSchedule.length);
                 oScheduleModel.setData(aSchedule);
                 
                 // Update the overview model
                 const oOverviewModel = this.getView().getModel("overviewData");
+                oOverviewModel.setSizeLimit(aOverview.length);
                 oOverviewModel.setData(aOverview);
                 
                 oModel.setProperty("/scheduleOriginal", null);
@@ -998,7 +1264,11 @@ sap.ui.define([
                     oOverviewPayrollClassificationFilter.setSelectedKeys([]);
                 }
 
-                let sMessage = `Amortization executed successfully: ${aSchedule.length} schedule entries and ${aOverview.length} overview records`;
+                // Calculate total transactions processed for informational message
+                const iTotalTransactions = aFilteredData.length;
+                const iGroupedRecords = aOverview.length;
+                
+                let sMessage = `Amortization executed successfully: ${iTotalTransactions} transactions grouped into ${iGroupedRecords} records, ${aSchedule.length} schedule entries generated`;
                 
                 if (aUnconfiguredData.length > 0) {
                     const aUnconfiguredProducts = [...new Set(aUnconfiguredData.map(r => r.PRODUCTID))].join(", ");
@@ -1009,6 +1279,9 @@ sap.ui.define([
                 } else {
                     MessageToast.show(sMessage);
                 }
+
+                // Auto-populate summary data
+                this._populateSummaryData();
 
             } catch (error) {
                 MessageBox.error("Error executing amortization: " + error.message);
@@ -1341,7 +1614,14 @@ sap.ui.define([
                     oOverviewPayrollClassificationFilter.setSelectedKeys([]);
                 }
 
-                MessageToast.show(`Data refreshed successfully: ${aSchedule.length} schedule entries and ${aOverview.length} overview records`);
+                // Calculate total transactions for informational message
+                const iTotalTransactions = aFilteredData.length;
+                const iGroupedRecords = aOverview.length;
+                
+                MessageToast.show(`Data refreshed successfully: ${iTotalTransactions} transactions grouped into ${iGroupedRecords} records, ${aSchedule.length} schedule entries`);
+
+                // Auto-populate summary data
+                this._populateSummaryData();
 
             } catch (error) {
                 MessageBox.error("Error refreshing data: " + error.message);
@@ -1350,10 +1630,46 @@ sap.ui.define([
             }
         },
 
+        /**
+         * Groups payee data by PAYEEID and PRODUCTID combination,
+         * summing up the VALUE field for each group.
+         * @param {Array} aPayeeData - Raw payee data from API
+         * @returns {Array} - Grouped data with summed VALUES
+         */
+        _groupPayeeDataByPayeeAndProduct(aPayeeData) {
+            const oGrouped = {};
+
+            aPayeeData.forEach((oRecord) => {
+                const sKey = `${oRecord.PAYEEID}|${oRecord.PRODUCTID}`;
+                
+                if (!oGrouped[sKey]) {
+                    // Initialize group with first record's data
+                    oGrouped[sKey] = {
+                        PAYEEID: oRecord.PAYEEID,
+                        PRODUCTID: oRecord.PRODUCTID,
+                        ORDERID: oRecord.ORDERID || "", // Keep first order ID or combine as needed
+                        customer: oRecord.customer || "",
+                        VALUE: 0,
+                        transactionCount: 0
+                    };
+                }
+                
+                // Sum up the VALUE field
+                oGrouped[sKey].VALUE += parseFloat(oRecord.VALUE) || 0;
+                oGrouped[sKey].transactionCount += 1;
+            });
+
+            // Convert to array and return
+            return Object.values(oGrouped);
+        },
+
         _executeAmortizationCalculation(aPayeeData, aSetups) {
             const aSchedule = [];
 
-            aPayeeData.forEach((oPayeeRecord) => {
+            // Group payee data by PAYEEID and PRODUCTID, summing up VALUES
+            const aGroupedData = this._groupPayeeDataByPayeeAndProduct(aPayeeData);
+
+            aGroupedData.forEach((oPayeeRecord) => {
                 try {
                     // Find matching setup by productId (from API: PRODUCTID)
                     const oSetup = aSetups.find(setup => setup.productId === oPayeeRecord.PRODUCTID);
@@ -1363,12 +1679,12 @@ sap.ui.define([
                         return;
                     }
 
-                    // Extract values from payee record and setup
+                    // Extract values from grouped payee record and setup
                     const payeeId = oPayeeRecord.PAYEEID || "";
                     const orderId = oPayeeRecord.ORDERID || "";
                     const product = oPayeeRecord.PRODUCTID || "";
                     const customer = oPayeeRecord.customer || "";
-                    const totalIncentive = parseFloat(oPayeeRecord.VALUE) || 0;
+                    const totalIncentive = parseFloat(oPayeeRecord.VALUE) || 0; // This is now the summed value
                     const capPercent = parseFloat(oSetup.capPercent) || 100;
                     const term = parseInt(oSetup.term) || 12;
                     const payoutFreq = oSetup.amortizationFrequency || "Monthly";
@@ -1407,7 +1723,9 @@ sap.ui.define([
                             "Data Type Name": "",
                             "Account Type": "",
                             "Payroll Classification": payrollClassification,
-                            Notes: "Non-Deferred Payment"
+                            Notes: oPayeeRecord.transactionCount > 1 
+                                ? `Non-Deferred Payment`
+                                : "Non-Deferred Payment"
                         });
                     } else {
                         // Deferred: Use existing logic with term and payment frequency
@@ -1442,7 +1760,9 @@ sap.ui.define([
                                 "Data Type Name": "",
                                 "Account Type": "",
                                 "Payroll Classification": payrollClassification,
-                                Notes: `Installment ${i} of ${periods}`
+                                Notes: oPayeeRecord.transactionCount > 1 
+                                    ? `Installment ${i} of ${periods}`
+                                    : `Installment ${i} of ${periods}`
                             });
                             
                             // Add months to current date for next period
@@ -1460,7 +1780,10 @@ sap.ui.define([
         _prepareOverviewData(aPayeeData, aSetups) {
             const aOverview = [];
 
-            aPayeeData.forEach((oPayeeRecord) => {
+            // Group payee data by PAYEEID and PRODUCTID, summing up VALUES
+            const aGroupedData = this._groupPayeeDataByPayeeAndProduct(aPayeeData);
+
+            aGroupedData.forEach((oPayeeRecord) => {
                 try {
                     // Find matching setup by productId
                     const oSetup = aSetups.find(setup => setup.productId === oPayeeRecord.PRODUCTID);
@@ -1482,13 +1805,13 @@ sap.ui.define([
                         paymentStartDate = new Date();
                     }
 
-                    // Create overview record with combined data
+                    // Create overview record with grouped/summed data
                     aOverview.push({
                         PayeeId: oPayeeRecord.PAYEEID || "",
                         OrderId: oPayeeRecord.ORDERID || "",
                         Product: oPayeeRecord.PRODUCTID || "",
                         Customer: oPayeeRecord.customer || "",
-                        "Total Incentive": this._formatCurrency(oPayeeRecord.VALUE || 0),
+                        "Total Incentive": this._formatCurrency(oPayeeRecord.VALUE || 0), // This is now the summed value
                         "Cap %": parseFloat(oSetup.capPercent) || 100,
                         Term: parseInt(oSetup.term) || 12,
                         "Payment Frequency": oSetup.amortizationFrequency || "Monthly",
@@ -1500,7 +1823,9 @@ sap.ui.define([
                         "Payroll Classification": oSetup.payrollClassification || "",
                         "Expense Start Date": "",
                         "Expense End Date": "",
-                        Notes: ""
+                        Notes: oPayeeRecord.transactionCount > 1 
+                            ? `${oPayeeRecord.transactionCount} transactions combined`
+                            : ""
                     });
                 } catch (error) {
                     console.error("Error preparing overview for payee record:", oPayeeRecord, error);
@@ -1665,6 +1990,511 @@ sap.ui.define([
                 oOverviewModel.setData(aFilteredOverview);
             }
         },
+
+        // ==================== Summary Section Methods ====================
+
+        /**
+         * Populates summary data automatically (called from Execute Amortization and Refresh)
+         * Uses the currently selected grouping option
+         */
+        _populateSummaryData() {
+            const oScheduleModel = this.getView().getModel("scheduleData");
+            const aScheduleData = oScheduleModel.getData() || [];
+
+            if (aScheduleData.length === 0) {
+                // Clear summary if no schedule data
+                const oSummaryModel = this.getView().getModel("summaryData");
+                oSummaryModel.setData([]);
+                const oSummaryTotalsModel = this.getView().getModel("summaryTotals");
+                oSummaryTotalsModel.setProperty("/totalAmount", "$0.00");
+                return;
+            }
+
+            // Get selected grouping field (default to PayeeId)
+            const oGroupBySelector = this.getView().byId("summaryGroupBySelector");
+            const sGroupBy = oGroupBySelector ? (oGroupBySelector.getSelectedKey() || "PayeeId") : "PayeeId";
+
+            // Group and aggregate data
+            const oGroupedData = {};
+
+            aScheduleData.forEach(item => {
+                let sKey;
+                
+                switch (sGroupBy) {
+                    case "PayeeId":
+                        sKey = item.PayeeId || "Unknown";
+                        break;
+                    case "OrderId":
+                        sKey = item.OrderId || "Unknown";
+                        break;
+                    case "Product":
+                        sKey = item.Product || "Unknown";
+                        break;
+                    case "PayrollClassification":
+                        sKey = item["Payroll Classification"] || "Unknown";
+                        break;
+                    default:
+                        sKey = item.PayeeId || "Unknown";
+                }
+
+                if (!oGroupedData[sKey]) {
+                    oGroupedData[sKey] = {
+                        groupKey: sKey,
+                        groupBy: sGroupBy,
+                        items: [],
+                        totalAmount: 0,
+                        recordCount: 0
+                    };
+                }
+
+                // Parse amount (remove $ and commas)
+                const sAmount = item["Total Incentive"] || "0";
+                const nAmount = parseFloat(String(sAmount).replace(/[$,]/g, "")) || 0;
+
+                oGroupedData[sKey].items.push(item);
+                oGroupedData[sKey].totalAmount += nAmount;
+                oGroupedData[sKey].recordCount++;
+            });
+
+            // Convert grouped data to array format for table display
+            const aSummaryData = Object.values(oGroupedData).map(group => {
+                const oFirstItem = group.items[0];
+                
+                return {
+                    PayeeId: sGroupBy === "PayeeId" ? group.groupKey : (group.items.length === 1 ? oFirstItem.PayeeId : "Multiple"),
+                    OrderId: sGroupBy === "OrderId" ? group.groupKey : (group.items.length === 1 ? oFirstItem.OrderId : "Multiple"),
+                    Customer: group.items.length === 1 ? oFirstItem.Customer : "Multiple",
+                    Product: sGroupBy === "Product" ? group.groupKey : (group.items.length === 1 ? oFirstItem.Product : "Multiple"),
+                    Amount: this._formatCurrency(group.totalAmount),
+                    CapPercent: group.items.length === 1 ? oFirstItem["Cap %"] : "-",
+                    Term: group.items.length === 1 ? oFirstItem.Term : "-",
+                    Frequency: group.items.length === 1 ? oFirstItem["Payment Frequency"] : "-",
+                    AmortizationStartDate: group.items.length === 1 ? oFirstItem["Payment Start Date"] : this._getDateRange(group.items),
+                    PayrollClassification: sGroupBy === "PayrollClassification" ? group.groupKey : (group.items.length === 1 ? oFirstItem["Payroll Classification"] : "Multiple"),
+                    EffectiveStartDate: group.items.length === 1 ? oFirstItem["Expense Start Date"] : this._getDateRange(group.items, "Expense Start Date"),
+                    RecordCount: group.recordCount
+                };
+            });
+
+            // Sort by group key
+            aSummaryData.sort((a, b) => {
+                const aKey = a[sGroupBy] || "";
+                const bKey = b[sGroupBy] || "";
+                return String(aKey).localeCompare(String(bKey));
+            });
+
+            // Update column visibility based on grouping
+            this._updateSummaryColumnVisibility(sGroupBy);
+
+            // Calculate grand total
+            const nGrandTotal = Object.values(oGroupedData).reduce((sum, group) => sum + group.totalAmount, 0);
+
+            // Update models
+            const oSummaryModel = this.getView().getModel("summaryData");
+            oSummaryModel.setData(aSummaryData);
+
+            const oSummaryTotalsModel = this.getView().getModel("summaryTotals");
+            oSummaryTotalsModel.setProperty("/totalAmount", "$" + nGrandTotal.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ","));
+
+            // Update chart data (chart now works independently from summary grouping)
+            this._updateChartData();
+        },
+
+        onSummaryGroupByChange(oEvent) {
+            // Auto-apply when selection changes (if there's data)
+            this._populateSummaryData();
+        },
+
+        onApplySummaryGrouping() {
+            const oScheduleModel = this.getView().getModel("scheduleData");
+            const aScheduleData = oScheduleModel.getData() || [];
+
+            if (aScheduleData.length === 0) {
+                MessageBox.warning("No schedule data available. Please execute amortization first.");
+                return;
+            }
+
+            this._populateSummaryData();
+            MessageToast.show("Summary updated");
+        },
+
+        _updateSummaryColumnVisibility(sGroupBy) {
+            const oSummaryColumnsModel = this.getView().getModel("summaryColumns");
+            
+            // Reset all to visible
+            const oVisibility = {
+                showPayeeId: true,
+                showOrderId: true,
+                showCustomer: true,
+                showProduct: true,
+                showCapPercent: true,
+                showTerm: true,
+                showFrequency: true,
+                showPayrollClassification: true,
+                showRecordCount: true
+            };
+
+            // When grouping, the grouped field is always visible as the primary identifier
+            // Other identification fields may show "Multiple" if there are multiple values
+            
+            oSummaryColumnsModel.setData(oVisibility);
+        },
+
+        _parseDateString(sDate) {
+            if (!sDate) return null;
+            
+            // Try parsing common date formats
+            // Format: "MMM DD, YYYY" (e.g., "Jan 15, 2026")
+            const oDate = new Date(sDate);
+            if (!isNaN(oDate.getTime())) {
+                return oDate;
+            }
+            
+            return null;
+        },
+
+        _getDateRange(aItems, sField) {
+            const sDateField = sField || "Payment Start Date";
+            const aDates = aItems
+                .map(item => item[sDateField])
+                .filter(Boolean)
+                .map(d => this._parseDateString(d))
+                .filter(d => d !== null)
+                .sort((a, b) => a - b);
+
+            if (aDates.length === 0) return "-";
+            if (aDates.length === 1) return this._formatDate(aDates[0]);
+
+            const oMinDate = aDates[0];
+            const oMaxDate = aDates[aDates.length - 1];
+
+            if (oMinDate.getTime() === oMaxDate.getTime()) {
+                return this._formatDate(oMinDate);
+            }
+
+            return `${this._formatDate(oMinDate)} - ${this._formatDate(oMaxDate)}`;
+        },
+
+        onClearSummaryFilters() {
+            // Clear date pickers
+            const oDateFrom = this.getView().byId("summaryDateFrom");
+            const oDateTo = this.getView().byId("summaryDateTo");
+            oDateFrom.setValue("");
+            oDateTo.setValue("");
+
+            // Reset group by selector to first option
+            const oGroupBySelector = this.getView().byId("summaryGroupBySelector");
+            oGroupBySelector.setSelectedKey("PayeeId");
+
+            // Clear summary data
+            const oSummaryModel = this.getView().getModel("summaryData");
+            oSummaryModel.setData([]);
+
+            const oSummaryTotalsModel = this.getView().getModel("summaryTotals");
+            oSummaryTotalsModel.setProperty("/totalAmount", "$0.00");
+
+            // Clear chart data
+            const oChartDataModel = this.getView().getModel("chartData");
+            oChartDataModel.setData([]);
+
+            MessageToast.show("Summary filters cleared");
+        },
+
+        // ==================== Chart Methods ====================
+
+        /**
+         * Updates chart data based on current chart configuration and schedule data
+         * Works independently of summary grouping
+         */
+        _updateChartData() {
+            const oScheduleModel = this.getView().getModel("scheduleData");
+            const aScheduleData = oScheduleModel.getData() || [];
+            
+            console.log("_updateChartData called, schedule data length:", aScheduleData.length);
+            
+            if (aScheduleData.length === 0) {
+                const oChartDataModel = this.getView().getModel("chartData");
+                oChartDataModel.setData([]);
+                console.log("Chart data cleared - no schedule data");
+                this._destroyChart();
+                return;
+            }
+
+            const oChartConfigModel = this.getView().getModel("chartConfig");
+            const sChartType = oChartConfigModel.getProperty("/chartType");
+            const sDimension = oChartConfigModel.getProperty("/dimension");
+            const sMeasure = oChartConfigModel.getProperty("/measure");
+            const sTopN = oChartConfigModel.getProperty("/topN");
+
+            console.log("Chart config:", { sChartType, sDimension, sMeasure, sTopN });
+
+            // Group data by the selected dimension
+            const oGroupedData = {};
+            
+            aScheduleData.forEach(item => {
+                let dimensionValue;
+                
+                // Get dimension value based on selected dimension
+                switch (sDimension) {
+                    case "PayeeId":
+                        dimensionValue = item.PayeeId || "Unknown";
+                        break;
+                    case "Product":
+                        dimensionValue = item.Product || "Unknown";
+                        break;
+                    case "PayrollClassification":
+                        dimensionValue = item["Payroll Classification"] || "Unknown";
+                        break;
+                    case "OrderId":
+                        dimensionValue = item.OrderId || "Unknown";
+                        break;
+                    default:
+                        dimensionValue = item.PayeeId || "Unknown";
+                }
+                
+                if (!oGroupedData[dimensionValue]) {
+                    oGroupedData[dimensionValue] = {
+                        dimension: String(dimensionValue),
+                        totalAmount: 0,
+                        recordCount: 0
+                    };
+                }
+                
+                // Parse amount (remove $ and commas)
+                const sAmount = item["Total Incentive"] || "0";
+                const nAmount = parseFloat(String(sAmount).replace(/[$,]/g, "")) || 0;
+                
+                oGroupedData[dimensionValue].totalAmount += nAmount;
+                oGroupedData[dimensionValue].recordCount++;
+            });
+
+            // Convert to array and prepare chart data
+            let aChartData = Object.values(oGroupedData).map(group => {
+                let measureValue;
+                
+                if (sMeasure === "Amount") {
+                    measureValue = group.totalAmount;
+                } else if (sMeasure === "RecordCount") {
+                    measureValue = group.recordCount;
+                }
+                
+                return {
+                    dimension: group.dimension,
+                    value: measureValue
+                };
+            });
+
+            // Sort by value descending
+            aChartData.sort((a, b) => b.value - a.value);
+
+            // Apply Top N filter
+            if (sTopN !== "all") {
+                const nTopN = parseInt(sTopN);
+                aChartData = aChartData.slice(0, nTopN);
+            }
+
+            console.log("Chart data prepared:", aChartData.length, "items", aChartData);
+
+            // Update chart data model
+            const oChartDataModel = this.getView().getModel("chartData");
+            oChartDataModel.setData(aChartData);
+            
+            console.log("Chart data model updated");
+
+            // Render chart with Chart.js after DOM updates
+            setTimeout(() => {
+                this._renderChart(aChartData, sChartType, sDimension, sMeasure);
+            }, 100);
+        },
+
+        /**
+         * Destroys existing Chart.js instance
+         */
+        _destroyChart() {
+            if (this._chartInstance) {
+                this._chartInstance.destroy();
+                this._chartInstance = null;
+                console.log("Chart instance destroyed");
+            }
+        },
+
+        /**
+         * Renders chart using Chart.js
+         */
+        _renderChart(aChartData, sChartType, sDimension, sMeasure) {
+            if (!window.Chart) {
+                console.error("Chart.js library not loaded");
+                MessageToast.show("Chart library is loading. Please try again in a moment.");
+                return;
+            }
+
+            // Get canvas element
+            const oCanvas = document.getElementById('summaryChart');
+            if (!oCanvas) {
+                console.error("Canvas element not found, retrying...");
+                // Retry after a short delay to allow DOM to update
+                setTimeout(() => {
+                    this._renderChart(aChartData, sChartType, sDimension, sMeasure);
+                }, 200);
+                return;
+            }
+
+            console.log("Canvas element found, rendering chart...");
+
+            // Destroy existing chart instance
+            this._destroyChart();
+
+            // Prepare data for Chart.js
+            const labels = aChartData.map(item => item.dimension);
+            const values = aChartData.map(item => item.value);
+
+            // Map UI5 chart types to Chart.js types
+            let chartType = sChartType;
+            if (sChartType === "column") {
+                chartType = "bar";
+            } else if (sChartType === "donut") {
+                chartType = "doughnut";
+            }
+
+            // Generate colors for the chart
+            const colors = this._generateChartColors(aChartData.length);
+
+            // Chart.js configuration
+            const config = {
+                type: chartType,
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: sMeasure === "Amount" ? "Amount ($)" : "No. of payments",
+                        data: values,
+                        backgroundColor: chartType === "pie" || chartType === "doughnut" ? colors : colors[0],
+                        borderColor: chartType === "pie" || chartType === "doughnut" ? colors : colors[0],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: sChartType === "bar" ? 'y' : 'x',
+                    plugins: {
+                        legend: {
+                            display: chartType === "pie" || chartType === "doughnut",
+                            position: 'right'
+                        },
+                        title: {
+                            display: true,
+                            text: `${sMeasure} by ${sDimension}`
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (sMeasure === "Amount") {
+                                        label += '$' + context.parsed.y.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                                    } else {
+                                        label += context.parsed.y;
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    },
+                    scales: chartType === "pie" || chartType === "doughnut" ? {} : {
+                        x: {
+                            beginAtZero: true
+                        },
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    if (sMeasure === "Amount") {
+                                        return '$' + value.toLocaleString();
+                                    }
+                                    return value;
+                                }
+                            }
+                        }
+                    }
+                }
+            };
+
+            // Create new chart instance
+            this._chartInstance = new Chart(oCanvas, config);
+            console.log("Chart rendered successfully");
+        },
+
+        /**
+         * Generates color palette for charts
+         */
+        _generateChartColors(count) {
+            const baseColors = [
+                'rgba(54, 162, 235, 0.8)',   // Blue
+                'rgba(255, 99, 132, 0.8)',   // Red
+                'rgba(255, 206, 86, 0.8)',   // Yellow
+                'rgba(75, 192, 192, 0.8)',   // Green
+                'rgba(153, 102, 255, 0.8)',  // Purple
+                'rgba(255, 159, 64, 0.8)',   // Orange
+                'rgba(199, 199, 199, 0.8)',  // Grey
+                'rgba(83, 102, 255, 0.8)',   // Indigo
+                'rgba(255, 99, 255, 0.8)',   // Pink
+                'rgba(50, 205, 50, 0.8)'     // Lime
+            ];
+            
+            if (count <= baseColors.length) {
+                return baseColors.slice(0, count);
+            }
+            
+            // Generate more colors if needed
+            const colors = [...baseColors];
+            for (let i = baseColors.length; i < count; i++) {
+                const hue = (i * 137.508) % 360; // Golden angle approximation
+                colors.push(`hsla(${hue}, 70%, 60%, 0.8)`);
+            }
+            return colors;
+        },
+
+        onChartTypeChange(oEvent) {
+            const sSelectedKey = oEvent.getParameter("item").getKey();
+            const oChartConfigModel = this.getView().getModel("chartConfig");
+            oChartConfigModel.setProperty("/chartType", sSelectedKey);
+            
+            // Refresh chart with new type
+            this._updateChartData();
+        },
+
+        onChartDimensionChange(oEvent) {
+            const sSelectedKey = oEvent.getParameter("selectedItem").getKey();
+            const oChartConfigModel = this.getView().getModel("chartConfig");
+            oChartConfigModel.setProperty("/dimension", sSelectedKey);
+            
+            // Refresh chart data
+            this._updateChartData();
+        },
+
+        onChartMeasureChange(oEvent) {
+            const sSelectedKey = oEvent.getParameter("selectedItem").getKey();
+            const oChartConfigModel = this.getView().getModel("chartConfig");
+            oChartConfigModel.setProperty("/measure", sSelectedKey);
+            
+            // Refresh chart data
+            this._updateChartData();
+        },
+
+        onChartTopNChange(oEvent) {
+            const sSelectedKey = oEvent.getParameter("selectedItem").getKey();
+            const oChartConfigModel = this.getView().getModel("chartConfig");
+            oChartConfigModel.setProperty("/topN", sSelectedKey);
+            
+            // Refresh chart data
+            this._updateChartData();
+        },
+
+        // ==================== End Chart Methods ====================
+
+        // ==================== End Summary Section Methods ====================
         
 
         async onFilterPress() {
@@ -1835,44 +2665,6 @@ sap.ui.define([
             const sExpenseStartDate = oExpenseStartDatePicker.getValue();
             const sExpenseEndDate = oExpenseEndDatePicker.getValue();
 
-            // // Validate required fields
-            // if (!sProduct) {
-            //     MessageBox.error("Please select a Product");
-            //     return;
-            // }
-            // // if (!sTotalIncentive) {
-            // //     MessageBox.error("Please enter Total Incentive");
-            // //     return;
-            // // }
-            // if (!sTerm) {
-            //     MessageBox.error("Please enter Term");
-            //     return;
-            // }
-            // if (!sPaymentFrequency) {
-            //     MessageBox.error("Please select Payment Frequency");
-            //     return;
-            // }
-            // if (!sPayrollClassification) {
-            //     MessageBox.error("Please select Payroll Classification");
-            //     return;
-            // }
-            // if (!sDataType) {
-            //     MessageBox.error("Please select Data Type");
-            //     return;
-            // }
-            // if (!sAccountType) {
-            //     MessageBox.error("Please select Account Type");
-            //     return;
-            // }
-            // if (!sExpenseStartDate) {
-            //     MessageBox.error("Please select Expense Start Date");
-            //     return;
-            // }
-            // // if (!sExpenseEndDate) {
-            // //     MessageBox.error("Please select Expense End Date");
-            // //     return;
-            // // }
-
             // Validate numeric values
             const fTotalIncentive = parseFloat(sTotalIncentive);
             const iTerm = parseInt(sTerm);
@@ -1961,17 +2753,25 @@ sap.ui.define([
                     return response.json();
                 })
                 .then(data => {
-                    const result = data.value || [];
+                    const result = data.value.filter(obj => obj.CREATEDBY === 'Administrator') || [];
+
                     // Process the result to add a combined date range property
                     const processedResult = result.map(item => {
                         const startDate = item.STARTDATE ? item.STARTDATE.split('T')[0] : '';
-                        const endDate = item.ENDDATE ? item.ENDDATE.split('T')[0] : '';
+                        let endDate = '';
+                        if (item.ENDDATE) {
+                            const endDateObj = new Date(item.ENDDATE.split('T')[0]);
+                            endDateObj.setDate(endDateObj.getDate() - 1);
+                            endDate = endDateObj.toISOString().split('T')[0];
+                        }
                         return {
                             ...item,
                             PERIOD_RANGE: `${startDate} to ${endDate}`
                         };
                     });
-                    this.getView().getModel("periodsData").setData(processedResult);
+                    const oPeriodsModel = this.getView().getModel("periodsData");
+                    oPeriodsModel.setSizeLimit(processedResult.length);
+                    oPeriodsModel.setData(processedResult);
                 })
                 .catch(error => {
                     MessageBox.error("Error fetching periods: " + error.message);
@@ -2702,40 +3502,6 @@ sap.ui.define([
                 MessageBox.warning("No setups to save");
                 return;
             }
-
-            // // Validate all rows
-            // for (let i = 0; i < aSetups.length; i++) {
-            //     const oSetup = aSetups[i];
-            //     if (!oSetup.product) {
-            //         MessageBox.error(`Row ${i + 1}: Product is required`);
-            //         return;
-            //     }
-            //     if (!oSetup.term || isNaN(oSetup.term) || oSetup.term <= 0) {
-            //         MessageBox.error(`Row ${i + 1}: Valid Term is required`);
-            //         return;
-            //     }
-            //     if (!oSetup.paymentFrequency) {
-            //         MessageBox.error(`Row ${i + 1}: Payment Frequency is required`);
-            //         return;
-            //     }
-            //     if (!oSetup.dataType) {
-            //         MessageBox.error(`Row ${i + 1}: Data Type is required`);
-            //         return;
-            //     }
-            //     if (!oSetup.accountType) {
-            //         MessageBox.error(`Row ${i + 1}: Account Type is required`);
-            //         return;
-            //     }
-            //     if (!oSetup.payrollClassification) {
-            //         MessageBox.error(`Row ${i + 1}: Payroll Classification is required`);
-            //         return;
-            //     }
-            //     if (!oSetup.paymentStartDate) {
-            //         MessageBox.error(`Row ${i + 1}: Payment Start Date is required`);
-            //         return;
-            //     }
-            // }
-
             BusyIndicator.show(0);
 
             try {

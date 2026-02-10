@@ -35,7 +35,21 @@ service AmortizationService {
         connectViaAPI: Boolean;
     }
 
+    type EmailAttachment: {
+        filename: String;
+        content: String; // base64 encoded
+        contentType: String;
+    }
+
+    type EmailInput: {
+        to: String;
+        subject: String;
+        body: String;
+        attachment: EmailAttachment;
+    }
+
     action saveAmortizationSetup(setupData: array of SetupInput) returns String;
     action deleteAmortizationSetupByProduct(productId: String) returns Boolean;
     action saveDataSourceMappings(mappingData: array of MappingInput) returns String;
+    action sendEmail(to: String, subject: String, body: String, attachment: EmailAttachment) returns String;
 }

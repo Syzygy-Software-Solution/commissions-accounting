@@ -6,7 +6,10 @@
 		"@cap-js/hana": "^2",
 		"@sap/cds": "^9",
 		"@sap/xssec": "^4",
-		"express": "^4"
+		"@sap/xsenv": "^5",
+		"@sap-cloud-sdk/connectivity": "^3",
+		"express": "^4",
+		"nodemailer": "^6"
 	},
 	"devDependencies": {
 		"@cap-js/sqlite": "^2",

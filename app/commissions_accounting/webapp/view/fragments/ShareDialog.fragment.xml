@@ -1,0 +1,62 @@
+<core:FragmentDefinition
+    xmlns="sap.m"
+    xmlns:core="sap.ui.core"
+    xmlns:layout="sap.ui.layout">
+    
+    <Dialog
+        id="shareDialog"
+        title="Share Amortization Data"
+        type="Message"
+        contentWidth="450px">
+        <content>
+            <VBox class="sapUiSmallMargin">
+                <Label text="Select data to share:" class="sapUiTinyMarginBottom" required="true" />
+                <RadioButtonGroup id="shareDataTypeGroup" columns="1" selectedIndex="0" class="sapUiSmallMarginBottom">
+                    <buttons>
+                        <RadioButton id="shareScheduleRadio" text="Amortization Schedule" enabled="{/hasScheduleData}" />
+                        <RadioButton id="shareOverviewRadio" text="Overview Data" enabled="{/hasOverviewData}" />
+                        <RadioButton id="shareBothRadio" text="Both (Schedule &amp; Overview)" enabled="{= ${/hasScheduleData} &amp;&amp; ${/hasOverviewData} }" />
+                    </buttons>
+                </RadioButtonGroup>
+                
+                <Label text="Recipient Email Address:" class="sapUiTinyMarginBottom" required="true" />
+                <Input
+                    id="shareEmailInput"
+                    type="Email"
+                    placeholder="Enter email address"
+                    width="100%"
+                    liveChange=".onShareEmailChange"
+                    valueLiveUpdate="true"
+                    class="sapUiSmallMarginBottom" />
+                
+                <Label text="Subject (Optional):" class="sapUiTinyMarginBottom" />
+                <Input
+                    id="shareSubjectInput"
+                    placeholder="Amortization Data Export"
+                    width="100%"
+                    class="sapUiSmallMarginBottom" />
+                
+                <Label text="Message (Optional):" class="sapUiTinyMarginBottom" />
+                <TextArea
+                    id="shareMessageInput"
+                    placeholder="Please find the attached amortization data."
+                    width="100%"
+                    rows="3" />
+            </VBox>
+        </content>
+        <beginButton>
+            <Button
+                id="shareSendButton"
+                text="Send"
+                type="Emphasized"
+                icon="sap-icon://email"
+                press=".onSendShareEmail"
+                enabled="{/isEmailValid}" />
+        </beginButton>
+        <endButton>
+            <Button
+                text="Cancel"
+                press=".onCloseShareDialog" />
+        </endButton>
+    </Dialog>
+</core:FragmentDefinition>

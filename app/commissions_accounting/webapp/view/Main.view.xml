@@ -6,7 +6,8 @@
     xmlns:layout="sap.ui.layout"
     xmlns:core="sap.ui.core"
     xmlns:form="sap.ui.layout.form"
-    xmlns:codeeditor="sap.ui.codeeditor">
+    xmlns:codeeditor="sap.ui.codeeditor"
+    xmlns:html="http://www.w3.org/1999/xhtml">
     
     <tnt:ToolPage id="idToolPage" sideExpanded="false">
         <tnt:header>
@@ -57,6 +58,13 @@
                                         <core:ListItem key="{periodsData>NAME}" text="{periodsData>NAME}" additionalText="{periodsData>PERIOD_RANGE}" />
                                     </ComboBox>
                                     <Button text="Execute Amortization" type="Success" icon="sap-icon://play" press=".onExecuteAmortizationPress" />
+                                    <Button 
+                                        id="shareButton"
+                                        icon="sap-icon://share-2" 
+                                        type="Ghost" 
+                                        tooltip="Share data via email"
+                                        press=".onSharePress"
+                                        enabled="{= ${scheduleData>/}.length > 0 || ${overviewData>/}.length > 0 }" />
                                     <Button type="Ghost" icon="sap-icon://download" visible="false" text="Download Amortization Template" press=".onDownloadAmortizationTemplatePress"></Button>
                                     <Button type="Ghost" icon="sap-icon://upload" visible="false" text="Upload Amortization Data" press=".onUploadAmortizationDataPress"></Button>
                                 </uxap:actions>
@@ -124,14 +132,14 @@
                                                     <Column><Text text="Cap %" /></Column>
                                                     <Column><Text text="Term" /></Column>
                                                     <Column><Text text="Amortization Frequency" /></Column>
-                                                    <Column><Text text="Amortization Start Date" /></Column>
                                                     <!-- <Column><Text text="Plan" /></Column>
                                                     <Column><Text text="Data Type" /></Column>
                                                     <Column><Text text="Data Type Name" /></Column>
                                                     <Column><Text text="Account Type" /></Column> -->
                                                     <Column><Text text="Payroll Classification" /></Column>
-                                                    <Column><Text text="Expense Start Date" /></Column>
-                                                    <Column><Text text="Expense End Date" /></Column>
+                                                    <Column><Text text="Effective Start Date" /></Column>
+                                                    <!-- <Column><Text text="Expense Start Date" /></Column>
+                                                    <Column><Text text="Expense End Date" /></Column> -->
                                                     <Column><Text text="Notes" /></Column>
                                                 </columns>
                                                 <items>
@@ -145,14 +153,14 @@
                                                             <Text text="{scheduleData>Cap %}" />
                                                             <Text text="{scheduleData>Term}" />
                                                             <Text text="{scheduleData>Payment Frequency}" />
-                                                            <Text text="{scheduleData>Payment Start Date}" />
                                                             <!-- <Text text="{scheduleData>Plan}" />
                                                             <Text text="{scheduleData>Data Type}" />
                                                             <Text text="{scheduleData>Data Type Name}" />
                                                             <Text text="{scheduleData>Account Type}" /> -->
                                                             <Text text="{scheduleData>Payroll Classification}" />
-                                                            <Text text="{scheduleData>Expense Start Date}" />
-                                                            <Text text="{scheduleData>Expense End Date}" />
+                                                            <Text text="{scheduleData>Payment Start Date}" />
+                                                            <!-- <Text text="{scheduleData>Expense Start Date}" />
+                                                            <Text text="{scheduleData>Expense End Date}" /> -->
                                                             <Text text="{scheduleData>Notes}" />
                                                         </cells>
                                                     </ColumnListItem>
@@ -221,13 +229,14 @@
                                             <Table id="overviewTable" items="{overviewData>/}" noDataText=" " alternateRowColors="false">
                                                 <columns>
                                                     <Column><Text text="PayeeId" /></Column>
+                                                    <Column><Text text="OrderId" /></Column>
                                                     <Column><Text text="Customer" /></Column>
                                                     <Column><Text text="Product" /></Column>
                                                     <Column><Text text="Total Incentive" /></Column>
                                                     <Column><Text text="Cap %" /></Column>
                                                     <Column><Text text="Term" /></Column>
                                                     <Column><Text text="Amortization Frequency" /></Column>
-                                                    <Column><Text text="Amortization Start Month" /></Column>
+                                                    <Column><Text text="Effective Start Date" /></Column>
                                                     <!-- <Column><Text text="Plan" /></Column>
                                                     <Column><Text text="Data Type" /></Column>
                                                     <Column><Text text="Data Type Name" /></Column>
@@ -241,6 +250,7 @@
                                                     <ColumnListItem>
                                                         <cells>
                                                             <Text text="{overviewData>PayeeId}" />
+                                                            <Text text="{overviewData>OrderId}" />
                                                             <Text text="{overviewData>Customer}" />
                                                             <Text text="{overviewData>Product}" />
                                                             <Text text="{overviewData>Total Incentive}" />
@@ -272,6 +282,175 @@
                                                     <Button class="sapUiTinyMarginBegin" visible="false"  type="Ghost" icon="sap-icon://upload" text="Upload Amortization Data" press=".onUploadAmortizationDataPress"></Button>
                                                 </additionalContent>
                                             </IllustratedMessage>
+                                        </VBox>
+                                    </uxap:ObjectPageSubSection>
+                                </uxap:subSections>
+                            </uxap:ObjectPageSection>
+
+                            <uxap:ObjectPageSection title="Summary" titleUppercase="false">
+                                <uxap:subSections>
+                                    <uxap:ObjectPageSubSection visible="false">
+                                        <VBox>
+                                            <Toolbar>
+                                                <Label text="Group By:" class="sapUiTinyMarginEnd"/>
+                                                <SegmentedButton
+                                                    id="summaryGroupBySelector"
+                                                    selectionChange=".onSummaryGroupByChange">
+                                                    <items>
+                                                        <SegmentedButtonItem key="PayeeId" text="Payee ID" />
+                                                        <SegmentedButtonItem key="OrderId" text="Order ID" />
+                                                        <SegmentedButtonItem key="Product" text="Product" />
+                                                        <SegmentedButtonItem key="PayrollClassification" text="Payroll Classification" />
+                                                    </items>
+                                                </SegmentedButton>
+                                                <!-- Date Range - Hidden for now -->
+                                                <ToolbarSeparator class="sapUiSmallMarginBegin sapUiSmallMarginEnd" visible="false" />
+                                                <Label text="Date Range:" class="sapUiTinyMarginEnd" visible="false"/>
+                                                <DatePicker
+                                                    id="summaryDateFrom"
+                                                    placeholder="From Date"
+                                                    width="150px"
+                                                    displayFormat="MMM dd, yyyy"
+                                                    valueFormat="yyyy-MM-dd"
+                                                    visible="false" />
+                                                <DatePicker
+                                                    id="summaryDateTo"
+                                                    placeholder="To Date"
+                                                    width="150px"
+                                                    displayFormat="MMM dd, yyyy"
+                                                    valueFormat="yyyy-MM-dd"
+                                                    class="sapUiTinyMarginBegin"
+                                                    visible="false" />
+                                                <Button
+                                                    text="Apply"
+                                                    type="Emphasized"
+                                                    icon="sap-icon://display"
+                                                    press=".onApplySummaryGrouping"
+                                                    class="sapUiSmallMarginBegin" />
+                                                <Button
+                                                    text="Clear"
+                                                    type="Ghost"
+                                                    icon="sap-icon://clear-filter"
+                                                    press=".onClearSummaryFilters"
+                                                    class="sapUiTinyMarginBegin" />
+                                                <ToolbarSpacer />
+                                                <Text text="Total Records: {= ${summaryData>/}.length }" class="sapUiSmallMarginEnd" />
+                                                <Text text="Total Amount: {summaryTotals>/totalAmount}" class="sapUiSmallMarginEnd" />
+                                            </Toolbar>
+                                            <Table id="summaryTable" items="{summaryData>/}" noDataText=" " alternateRowColors="false" visible="false">
+                                                <columns>
+                                                    <Column visible="{summaryColumns>/showPayeeId}"><Text text="PayeeId" /></Column>
+                                                    <Column visible="{summaryColumns>/showOrderId}"><Text text="OrderId" /></Column>
+                                                    <Column visible="{summaryColumns>/showCustomer}"><Text text="Customer" /></Column>
+                                                    <Column visible="{summaryColumns>/showProduct}"><Text text="Product" /></Column>
+                                                    <Column><Text text="Amount" /></Column>
+                                                    <Column visible="{summaryColumns>/showCapPercent}"><Text text="Cap %" /></Column>
+                                                    <Column visible="{summaryColumns>/showTerm}"><Text text="Term" /></Column>
+                                                    <Column visible="{summaryColumns>/showFrequency}"><Text text="Amortization Frequency" /></Column>
+                                                    <Column><Text text="Amortization Start Date" /></Column>
+                                                    <Column visible="{summaryColumns>/showPayrollClassification}"><Text text="Payroll Classification" /></Column>
+                                                    <Column><Text text="Effective Start Date" /></Column>
+                                                    <Column visible="{summaryColumns>/showRecordCount}"><Text text="Record Count" /></Column>
+                                                </columns>
+                                                <items>
+                                                    <ColumnListItem>
+                                                        <cells>
+                                                            <Text text="{summaryData>PayeeId}" visible="{summaryColumns>/showPayeeId}" />
+                                                            <Text text="{summaryData>OrderId}" visible="{summaryColumns>/showOrderId}" />
+                                                            <Text text="{summaryData>Customer}" visible="{summaryColumns>/showCustomer}" />
+                                                            <Text text="{summaryData>Product}" visible="{summaryColumns>/showProduct}" />
+                                                            <Text text="{summaryData>Amount}" />
+                                                            <Text text="{summaryData>CapPercent}" visible="{summaryColumns>/showCapPercent}" />
+                                                            <Text text="{summaryData>Term}" visible="{summaryColumns>/showTerm}" />
+                                                            <Text text="{summaryData>Frequency}" visible="{summaryColumns>/showFrequency}" />
+                                                            <Text text="{summaryData>AmortizationStartDate}" />
+                                                            <Text text="{summaryData>PayrollClassification}" visible="{summaryColumns>/showPayrollClassification}" />
+                                                            <Text text="{summaryData>EffectiveStartDate}" />
+                                                            <Text text="{summaryData>RecordCount}" visible="{summaryColumns>/showRecordCount}" />
+                                                        </cells>
+                                                    </ColumnListItem>
+                                                </items>
+                                            </Table>
+                                            <!-- visible="{= ${summaryData>/}.length === 0 }" -->
+                                            <IllustratedMessage
+                                                
+                                                illustrationType="sapIllus-SimpleNoSavedItems"
+                                                title="No Summary Data"
+                                                description="Execute amortization to generate summary data"
+                                                illustrationSize="Auto" 
+                                                visible="false" />
+                                        </VBox>
+                                    </uxap:ObjectPageSubSection>
+
+                                    <uxap:ObjectPageSubSection title="Analytics">
+                                        <VBox class="sapUiSmallMargin">
+                                            <Toolbar>
+                                                <Label text="Chart Type:" class="sapUiTinyMarginEnd"/>
+                                                <SegmentedButton
+                                                    id="chartTypeSelector"
+                                                    selectionChange=".onChartTypeChange"
+                                                    selectedKey="column">
+                                                    <items>
+                                                        <SegmentedButtonItem key="column" icon="sap-icon://horizontal-bar-chart" tooltip="Column Chart" />
+                                                        <SegmentedButtonItem key="bar" icon="sap-icon://horizontal-bar-chart-2" tooltip="Bar Chart" />
+                                                        <SegmentedButtonItem key="line" icon="sap-icon://line-chart" tooltip="Line Chart" />
+                                                        <SegmentedButtonItem key="pie" icon="sap-icon://pie-chart" tooltip="Pie Chart" />
+                                                        <SegmentedButtonItem key="donut" icon="sap-icon://donut-chart" tooltip="Donut Chart" />
+                                                    </items>
+                                                </SegmentedButton>
+                                                <ToolbarSeparator class="sapUiSmallMarginBegin sapUiSmallMarginEnd" />
+                                                <Label text="Dimension:" class="sapUiTinyMarginEnd"/>
+                                                <Select
+                                                    id="chartDimensionSelector"
+                                                    change=".onChartDimensionChange"
+                                                    selectedKey="{chartConfig>/dimension}"
+                                                    width="180px">
+                                                    <items>
+                                                        <core:Item key="PayeeId" text="Payee ID" />
+                                                        <core:Item key="Product" text="Product" />
+                                                        <core:Item key="PayrollClassification" text="Payroll Classification" />
+                                                        <core:Item key="OrderId" text="Order ID" />
+                                                    </items>
+                                                </Select>
+                                                <Label text="Measure:" class="sapUiTinyMarginBegin sapUiTinyMarginEnd"/>
+                                                <Select
+                                                    id="chartMeasureSelector"
+                                                    change=".onChartMeasureChange"
+                                                    selectedKey="{chartConfig>/measure}"
+                                                    width="150px">
+                                                    <items>
+                                                        <core:Item key="Amount" text="Amount" />
+                                                        <core:Item key="RecordCount" text="No. of payments" />
+                                                    </items>
+                                                </Select>
+                                                <Label text="Top:" class="sapUiTinyMarginBegin sapUiTinyMarginEnd"/>
+                                                <Select
+                                                    id="chartTopNSelector"
+                                                    change=".onChartTopNChange"
+                                                    selectedKey="{chartConfig>/topN}"
+                                                    width="80px">
+                                                    <items>
+                                                        <core:Item key="10" text="10" />
+                                                        <core:Item key="15" text="15" />
+                                                        <core:Item key="20" text="20" />
+                                                        <core:Item key="all" text="All" />
+                                                    </items>
+                                                </Select>
+                                                <ToolbarSpacer />
+                                            </Toolbar>
+                                            <VBox
+                                                visible="{= ${chartData>/}.length > 0 }"
+                                                height="500px"
+                                                class="sapUiSmallMarginTop"
+                                                width="100%">
+                                                <core:HTML content="&lt;canvas id='summaryChart' style='width:100%;height:480px;'&gt;&lt;/canvas&gt;" />
+                                            </VBox>
+                                            <IllustratedMessage
+                                                visible="{= ${chartData>/}.length === 0 }"
+                                                illustrationType="sapIllus-EmptyPlanningCalendar"
+                                                title="No Chart Data"
+                                                description="Execute amortization and the chart will be generated automatically"
+                                                illustrationSize="Auto" />
                                         </VBox>
                                     </uxap:ObjectPageSubSection>
                                 </uxap:subSections>
