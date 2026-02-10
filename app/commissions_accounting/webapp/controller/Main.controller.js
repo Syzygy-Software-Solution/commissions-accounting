@@ -89,6 +89,13 @@ sap.ui.define([
             });
             this.getView().setModel(oGreetingModel, "greeting");
 
+            // Code editor model
+            var oCodeEditorModel = new JSONModel({
+                language: "javascript",
+                code: ""
+            });
+            this.getView().setModel(oCodeEditorModel, "codeEditor");
+
             // Set dynamic greeting
             this._setGreeting();
 
@@ -3862,6 +3869,32 @@ sap.ui.define([
                 console.log("Could not fetch user info:", error);
                 return "User";
             }
+        },
+
+        /**
+         * Handles code editor language change
+         */
+        onCodeEditorLanguageChange(oEvent) {
+            const sSelectedLanguage = oEvent.getParameter("selectedItem").getKey();
+            const oCodeEditorModel = this.getView().getModel("codeEditor");
+            oCodeEditorModel.setProperty("/language", sSelectedLanguage);
+            MessageToast.show(`Language changed to: ${oEvent.getParameter("selectedItem").getText()}`);
+        },
+
+        /**
+         * Clears the code editor content
+         */
+        onClearCodeEditor() {
+            MessageBox.confirm("Are you sure you want to clear the code editor?", {
+                title: "Confirm",
+                onClose: (sAction) => {
+                    if (sAction === MessageBox.Action.OK) {
+                        const oCodeEditorModel = this.getView().getModel("codeEditor");
+                        oCodeEditorModel.setProperty("/code", "");
+                        MessageToast.show("Code editor cleared");
+                    }
+                }
+            });
         }
 
         // ==================== End Message Management Methods ====================

@@ -17,6 +17,7 @@
 						<OverflowToolbarLayoutData priority="NeverOverflow" />
 					</layoutData>
                 </Button>
+                <Title text="Commissions Accounting" titleStyle="Auto" />
                 <ToolbarSpacer/>
                 <Button
                     id="messageButton"
@@ -519,17 +520,51 @@
                                 </uxap:subSections>
                             </uxap:ObjectPageSection>
 
-                            <uxap:ObjectPageSection title="Amortization Calculation" visible="false" titleUppercase="false">
+                            <uxap:ObjectPageSection title="Amortization Calculation" visible="true" titleUppercase="false">
                                 <uxap:subSections>
                                     <uxap:ObjectPageSubSection>
                                         <VBox class="sapUiSmallMargin">
+                                            <Toolbar>
+                                                <Label text="Programming Language:" class="sapUiTinyMarginEnd"/>
+                                                <Select
+                                                    id="codeEditorLanguageSelector"
+                                                    selectedKey="{codeEditor>/language}"
+                                                    change=".onCodeEditorLanguageChange"
+                                                    width="200px">
+                                                    <items>
+                                                        <core:Item key="javascript" text="JavaScript" />
+                                                        <core:Item key="typescript" text="TypeScript" />
+                                                        <core:Item key="python" text="Python" />
+                                                        <core:Item key="java" text="Java" />
+                                                        <core:Item key="csharp" text="C#" />
+                                                        <core:Item key="sql" text="SQL" />
+                                                        <core:Item key="json" text="JSON" />
+                                                        <core:Item key="xml" text="XML" />
+                                                        <core:Item key="html" text="HTML" />
+                                                        <core:Item key="css" text="CSS" />
+                                                        <core:Item key="php" text="PHP" />
+                                                        <core:Item key="ruby" text="Ruby" />
+                                                        <core:Item key="golang" text="Go" />
+                                                        <core:Item key="yaml" text="YAML" />
+                                                        <core:Item key="markdown" text="Markdown" />
+                                                        <core:Item key="plain_text" text="Plain Text" />
+                                                    </items>
+                                                </Select>
+                                                <ToolbarSpacer />
+                                                <Button
+                                                    text="Clear"
+                                                    icon="sap-icon://delete"
+                                                    type="Ghost"
+                                                    press=".onClearCodeEditor"
+                                                    tooltip="Clear code editor" />
+                                            </Toolbar>
                                             <codeeditor:CodeEditor
                                                 id="amortizationCodeEditor"
-                                                type="javascript"
+                                                type="{codeEditor>/language}"
                                                 height="400px"
                                                 width="100%"
                                                 lineNumbers="true"
-                                                value=""
+                                                value="{codeEditor>/code}"
                                                 syntaxHints="true" />
                                         </VBox>
                                     </uxap:ObjectPageSubSection>
