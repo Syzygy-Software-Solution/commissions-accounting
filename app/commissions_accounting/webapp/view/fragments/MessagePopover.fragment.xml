@@ -1,0 +1,97 @@
+<core:FragmentDefinition 
+    xmlns="sap.m" 
+    xmlns:core="sap.ui.core"
+    xmlns:layout="sap.ui.layout">
+    <Popover
+        id="messagePopover"
+        class="sapUiContentPadding"
+        placement="Bottom"
+        showHeader="true"
+        title="Notifications"
+        contentWidth="450px"
+        contentHeight="auto">
+        <content>
+            <VBox class="sapUiSmallMargin">
+                <!-- No messages state -->
+                <FlexBox
+                    visible="{= ${messages>/count} === 0 }"
+                    direction="Column"
+                    alignItems="Center"
+                    justifyContent="Center"
+                    class="sapUiMediumMarginTopBottom">
+                    <core:Icon
+                        src="sap-icon://message-success"
+                        size="3rem"
+                        color="Positive"
+                        class="sapUiSmallMarginBottom" />
+                    <Text
+                        text="No notifications"
+                        class="sapUiSmallMarginBottom" />
+                    <Text
+                        text="You're all caught up!"
+                        class="sapMText" />
+                </FlexBox>
+                
+                <!-- Messages list -->
+                <List
+                    visible="{= ${messages>/count} > 0 }"
+                    items="{messages>/messages}"
+                    noDataText="No messages"
+                    class="sapUiSmallMarginBottom">
+                    <CustomListItem>
+                        <VBox class="sapUiSmallMargin">
+                            <!-- Message Header -->
+                            <HBox justifyContent="SpaceBetween" alignItems="Center" class="sapUiTinyMarginBottom">
+                                <HBox alignItems="Center">
+                                    <core:Icon
+                                        src="{= ${messages>type} === 'Error' ? 'sap-icon://error' : ${messages>type} === 'Warning' ? 'sap-icon://alert' : 'sap-icon://message-information' }"
+                                        color="{= ${messages>type} === 'Error' ? 'Negative' : ${messages>type} === 'Warning' ? 'Critical' : 'Neutral' }"
+                                        size="1.5rem"
+                                        class="sapUiTinyMarginEnd" />
+                                    <VBox>
+                                        <Title
+                                            text="{messages>title}"
+                                            level="H5"
+                                            class="sapUiTinyMarginBottom" />
+                                        <Text
+                                            text="{messages>subtitle}"
+                                            class="sapUiTinyText" />
+                                    </VBox>
+                                </HBox>
+                                <Button
+                                    icon="sap-icon://decline"
+                                    type="Transparent"
+                                    press=".onDismissMessage"
+                                    tooltip="Dismiss message" />
+                            </HBox>
+                            
+                            <!-- Message Description -->
+                            <Text
+                                text="{messages>description}"
+                                class="sapUiSmallMarginTop"
+                                wrapping="true" />
+                            
+                            <!-- Timestamp -->
+                            <Text
+                                text="Generated: {messages>timestamp}"
+                                class="sapUiTinyMarginTop sapUiTinyText" />
+                        </VBox>
+                    </CustomListItem>
+                </List>
+            </VBox>
+        </content>
+        <footer>
+            <Toolbar>
+                <ToolbarSpacer />
+                <Button
+                    text="Clear All"
+                    press=".onClearAllMessages"
+                    type="Emphasized"
+                    visible="{= ${messages>/count} > 0 }" />
+                <Button
+                    text="Close"
+                    press=".onCloseMessagePopover" />
+            </Toolbar>
+        </footer>
+    </Popover>
+</core:FragmentDefinition>

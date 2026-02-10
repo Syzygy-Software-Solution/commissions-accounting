@@ -1,0 +1,74 @@
+<core:FragmentDefinition
+    xmlns="sap.m"
+    xmlns:core="sap.ui.core">
+    <Dialog
+        id="chartDetailsDialog"
+        title="{chartDetails>/dialogTitle}"
+        contentWidth="1000px"
+        contentHeight="600px"
+        resizable="true"
+        draggable="true">
+        <content>
+            <VBox class="sapUiSmallMargin">
+                <HBox class="sapUiTinyMarginBottom">
+                    <VBox class="sapUiTinyMarginEnd">
+                        <Label text="Dimension:" class="sapUiTinyMarginBottom" design="Bold"/>
+                        <Text text="{chartDetails>/dimensionType}" />
+                    </VBox>
+                    <VBox class="sapUiSmallMarginBegin sapUiTinyMarginEnd">
+                        <Label text="Selected Value:" class="sapUiTinyMarginBottom" design="Bold"/>
+                        <Text text="{chartDetails>/selectedValue}" />
+                    </VBox>
+                    <VBox class="sapUiSmallMarginBegin">
+                        <Label text="Total Records:" class="sapUiTinyMarginBottom" design="Bold"/>
+                        <Text text="{= ${chartDetails>/data}.length }" />
+                    </VBox>
+                </HBox>
+                <Toolbar>
+                    <ToolbarSpacer />
+                    <Button 
+                        icon="sap-icon://excel-attachment" 
+                        text="Export to Excel"
+                        type="Transparent"
+                        press=".onExportChartDetails"
+                        tooltip="Export filtered data to Excel" />
+                </Toolbar>
+                <Table
+                    id="chartDetailsTable"
+                    items="{chartDetails>/data}"
+                    growing="true"
+                    growingThreshold="20"
+                    sticky="ColumnHeaders"
+                    alternateRowColors="true">
+                    <columns>
+                        <Column width="8rem"><Text text="PayeeId" /></Column>
+                        <Column width="10rem"><Text text="OrderId" /></Column>
+                        <Column width="10rem"><Text text="Product" /></Column>
+                        <Column width="8rem"><Text text="Amount" /></Column>
+                        <Column width="10rem"><Text text="Effective Start Date" /></Column>
+                        <Column width="10rem"><Text text="Payroll Classification" /></Column>
+                        <Column width="6rem"><Text text="Term" /></Column>
+                        <Column width="8rem"><Text text="Frequency" /></Column>
+                    </columns>
+                    <items>
+                        <ColumnListItem>
+                            <cells>
+                                <Text text="{chartDetails>PayeeId}" />
+                                <Text text="{chartDetails>OrderId}" />
+                                <Text text="{chartDetails>Product}" />
+                                <Text text="{chartDetails>Total Incentive}" />
+                                <Text text="{chartDetails>Effective Start Date}" />
+                                <Text text="{chartDetails>Payroll Classification}" />
+                                <Text text="{chartDetails>Term}" />
+                                <Text text="{chartDetails>Amortization Frequency}" />
+                            </cells>
+                        </ColumnListItem>
+                    </items>
+                </Table>
+            </VBox>
+        </content>
+        <beginButton>
+            <Button text="Close" press=".onCloseChartDetailsDialog" type="Emphasized" />
+        </beginButton>
+    </Dialog>
+</core:FragmentDefinition>

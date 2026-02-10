@@ -76,6 +76,22 @@ sap.ui.define([
             });
             this.getView().setModel(oChartConfigModel, "chartConfig");
 
+            // Messages model for message button
+            var oMessagesModel = new JSONModel({
+                messages: [],
+                count: 0
+            });
+            this.getView().setModel(oMessagesModel, "messages");
+
+            // Greeting model for header
+            var oGreetingModel = new JSONModel({
+                message: ""
+            });
+            this.getView().setModel(oGreetingModel, "greeting");
+
+            // Set dynamic greeting
+            this._setGreeting();
+
             // Hardcoded data - commented out, now fetching from database
             // var oDataSourceModel = new JSONModel([
             //     { columnKey: "productId", columnName: "Product Id", defaultLabel: "Product Id", customLabel: "", tableName: "", fieldName: "", isActive: true },
@@ -1271,12 +1287,21 @@ sap.ui.define([
                 let sMessage = `Amortization executed successfully: ${iTotalTransactions} transactions grouped into ${iGroupedRecords} records, ${aSchedule.length} schedule entries generated`;
                 
                 if (aUnconfiguredData.length > 0) {
-                    const aUnconfiguredProducts = [...new Set(aUnconfiguredData.map(r => r.PRODUCTID))].join(", ");
-                    MessageBox.information(
-                        `${sMessage}\n\nNote: ${aUnconfiguredData.length} transaction(s) with unconfigured product(s) were skipped: ${aUnconfiguredProducts}. Configure these products to include them.`,
-                        { title: "Amortization Complete" }
-                    );
+                    const aUnconfiguredProducts = [...new Set(aUnconfiguredData.map(r => r.PRODUCTID))];
+                    
+                    // Add warning message to message model
+                    this._addMessage({
+                        type: "Warning",
+                        title: "Unconfigured Products Detected",
+                        subtitle: `${aUnconfiguredData.length} transaction(s) skipped`,
+                        description: `The following product(s) are missing configuration: ${aUnconfiguredProducts.join(", ")}. Configure these products in the Setup section to include them in amortization calculations.`,
+                        counter: aUnconfiguredData.length
+                    });
+                    
+                    MessageToast.show(sMessage + " (Check messages for details)");
                 } else {
+                    // Clear any previous messages when all data is processed successfully
+                    this._clearMessages();
                     MessageToast.show(sMessage);
                 }
 
@@ -2376,6 +2401,13 @@ sap.ui.define([
                     responsive: true,
                     maintainAspectRatio: false,
                     indexAxis: sChartType === "bar" ? 'y' : 'x',
+                    onClick: (event, activeElements) => {
+                        if (activeElements && activeElements.length > 0) {
+                            const clickedIndex = activeElements[0].index;
+                            const clickedLabel = labels[clickedIndex];
+                            this.onChartClick(clickedLabel, sDimension, sMeasure);
+                        }
+                    },
                     plugins: {
                         legend: {
                             display: chartType === "pie" || chartType === "doughnut",
@@ -2490,6 +2522,133 @@ sap.ui.define([
             
             // Refresh chart data
             this._updateChartData();
+        },
+
+        /**
+         * Handles click event on chart elements
+         * Opens a dialog showing filtered schedule data for the clicked dimension
+         */
+        async onChartClick(sClickedValue, sDimension, sMeasure) {
+            console.log("Chart clicked:", sClickedValue, sDimension, sMeasure);
+            
+            // Get schedule data
+            const oScheduleModel = this.getView().getModel("scheduleData");
+            const aScheduleData = oScheduleModel.getData() || [];
+            
+            if (aScheduleData.length === 0) {
+                MessageToast.show("No schedule data available");
+                return;
+            }
+            
+            // Filter data based on clicked dimension
+            let aFilteredData = [];
+            let sDimensionField = "";
+            
+            switch (sDimension) {
+                case "PayeeId":
+                    sDimensionField = "PayeeId";
+                    aFilteredData = aScheduleData.filter(item => item.PayeeId === sClickedValue);
+                    break;
+                case "Product":
+                    sDimensionField = "Product";
+                    aFilteredData = aScheduleData.filter(item => item.Product === sClickedValue);
+                    break;
+                case "PayrollClassification":
+                    sDimensionField = "Payroll Classification";
+                    aFilteredData = aScheduleData.filter(item => item["Payroll Classification"] === sClickedValue);
+                    break;
+                case "OrderId":
+                    sDimensionField = "OrderId";
+                    aFilteredData = aScheduleData.filter(item => item.OrderId === sClickedValue);
+                    break;
+                default:
+                    aFilteredData = aScheduleData;
+            }
+            
+            console.log("Filtered data:", aFilteredData.length, "records");
+            
+            if (aFilteredData.length === 0) {
+                MessageToast.show(`No records found for ${sDimension}: ${sClickedValue}`);
+                return;
+            }
+            
+            // Prepare dialog data
+            const oDialogModel = new JSONModel({
+                dialogTitle: `Details for ${sDimension}: ${sClickedValue}`,
+                dimensionType: sDimension,
+                selectedValue: sClickedValue,
+                data: aFilteredData
+            });
+            
+            this.getView().setModel(oDialogModel, "chartDetails");
+            
+            // Load and open dialog
+            if (!this._pChartDetailsDialog) {
+                this._pChartDetailsDialog = Fragment.load({
+                    id: this.getView().getId(),
+                    name: "commissionsaccounting.view.fragments.ChartDetailsDialog",
+                    controller: this
+                }).then((oDialog) => {
+                    this.getView().addDependent(oDialog);
+                    return oDialog;
+                });
+            }
+            
+            const oDialog = await this._pChartDetailsDialog;
+            oDialog.open();
+        },
+
+        /**
+         * Closes the chart details dialog
+         */
+        onCloseChartDetailsDialog() {
+            if (this._pChartDetailsDialog) {
+                this._pChartDetailsDialog.then((oDialog) => {
+                    oDialog.close();
+                });
+            }
+        },
+
+        /**
+         * Exports the filtered chart details to Excel
+         */
+        onExportChartDetails() {
+            // Check if XLSX library is loaded
+            if (!window.XLSX) {
+                MessageToast.show("Excel library is loading. Please try again in a moment.");
+                return;
+            }
+            
+            const oChartDetailsModel = this.getView().getModel("chartDetails");
+            const aData = oChartDetailsModel.getProperty("/data") || [];
+            const sDimensionType = oChartDetailsModel.getProperty("/dimensionType");
+            const sSelectedValue = oChartDetailsModel.getProperty("/selectedValue");
+            
+            if (aData.length === 0) {
+                MessageToast.show("No data to export");
+                return;
+            }
+            
+            try {
+                // Create workbook and worksheet
+                const wb = XLSX.utils.book_new();
+                const ws = XLSX.utils.json_to_sheet(aData);
+                
+                // Add worksheet to workbook
+                XLSX.utils.book_append_sheet(wb, ws, "Filtered Data");
+                
+                // Generate filename
+                const currentDate = new Date().toISOString().split('T')[0];
+                const filename = `Chart_Details_${sDimensionType}_${sSelectedValue}_${currentDate}.xlsx`;
+                
+                // Download file
+                XLSX.writeFile(wb, filename);
+                
+                MessageToast.show(`Successfully exported ${aData.length} record(s)`);
+            } catch (error) {
+                console.error("Error exporting chart details:", error);
+                MessageBox.error("Failed to export data: " + error.message);
+            }
         },
 
         // ==================== End Chart Methods ====================
@@ -3551,6 +3710,160 @@ sap.ui.define([
                 BusyIndicator.hide();
                 MessageBox.error(`Failed to save setups: ${error.message}`);
             }
+        },
+
+        // ==================== Message Management Methods ====================
+
+        /**
+         * Adds a message to the messages model
+         * @param {Object} oMessage - Message object with type, title, subtitle, description
+         */
+        _addMessage(oMessage) {
+            const oMessagesModel = this.getView().getModel("messages");
+            const aMessages = oMessagesModel.getProperty("/messages") || [];
+            
+            // Add timestamp and unique ID
+            const oNewMessage = {
+                id: Date.now(),
+                timestamp: new Date().toLocaleString(),
+                ...oMessage
+            };
+            
+            aMessages.push(oNewMessage);
+            oMessagesModel.setProperty("/messages", aMessages);
+            oMessagesModel.setProperty("/count", aMessages.length);
+        },
+
+        /**
+         * Clears all messages
+         */
+        _clearMessages() {
+            const oMessagesModel = this.getView().getModel("messages");
+            oMessagesModel.setProperty("/messages", []);
+            oMessagesModel.setProperty("/count", 0);
+        },
+
+        /**
+         * Opens the message popover
+         */
+        async onMessageButtonPress(oEvent) {
+            const oButton = oEvent.getSource();
+            
+            // Load and open the message popover
+            if (!this._pMessagePopover) {
+                this._pMessagePopover = Fragment.load({
+                    id: this.getView().getId(),
+                    name: "commissionsaccounting.view.fragments.MessagePopover",
+                    controller: this
+                }).then((oPopover) => {
+                    this.getView().addDependent(oPopover);
+                    return oPopover;
+                });
+            }
+            
+            const oPopover = await this._pMessagePopover;
+            oPopover.openBy(oButton);
+        },
+
+        /**
+         * Dismisses a specific message
+         */
+        onDismissMessage(oEvent) {
+            const oButton = oEvent.getSource();
+            const oContext = oButton.getBindingContext("messages");
+            const sPath = oContext.getPath();
+            const iIndex = parseInt(sPath.split("/").pop());
+            
+            const oMessagesModel = this.getView().getModel("messages");
+            const aMessages = oMessagesModel.getProperty("/messages");
+            
+            aMessages.splice(iIndex, 1);
+            oMessagesModel.setProperty("/messages", aMessages);
+            oMessagesModel.setProperty("/count", aMessages.length);
+            
+            MessageToast.show("Message dismissed");
+        },
+
+        /**
+         * Clears all messages from the popover
+         */
+        onClearAllMessages() {
+            this._clearMessages();
+            MessageToast.show("All messages cleared");
+        },
+
+        /**
+         * Closes the message popover
+         */
+        onCloseMessagePopover() {
+            if (this._pMessagePopover) {
+                this._pMessagePopover.then((oPopover) => {
+                    oPopover.close();
+                });
+            }
+        },
+
+        /**
+         * Sets dynamic greeting based on current time and username
+         */
+        _setGreeting() {
+            const oGreetingModel = this.getView().getModel("greeting");
+            
+            // Get current hour in user's local timezone
+            const currentHour = new Date().getHours();
+            
+            // Determine greeting based on time
+            let greeting;
+            if (currentHour >= 0 && currentHour < 12) {
+                greeting = "Good morning";
+            } else if (currentHour >= 12 && currentHour < 17) {
+                greeting = "Good afternoon";
+            } else {
+                // 5 PM (17:00) to 11:59 PM (23:59)
+                greeting = "Good evening";
+            }
+            
+            // Get username from UserInfo API (SAP BTP)
+            this._getUserInfo().then((username) => {
+                const fullGreeting = `${greeting}, ${username}`;
+                oGreetingModel.setProperty("/message", fullGreeting);
+            }).catch(() => {
+                // Fallback if user info is not available
+                oGreetingModel.setProperty("/message", greeting);
+            });
+        },
+
+        /**
+         * Fetches user information from SAP UserInfo API
+         * @returns {Promise<string>} Username
+         */
+        async _getUserInfo() {
+            try {
+                // Try to get user info from SAP UI5 UserInfo API
+                const sap = window.sap;
+                if (sap && sap.ushell && sap.ushell.Container) {
+                    // Running in Fiori Launchpad
+                    const oUserInfo = sap.ushell.Container.getService("UserInfo");
+                    const sFullName = oUserInfo.getFullName();
+                    const sFirstName = sFullName.split(' ')[0];
+                    return sFirstName || sFullName || "User";
+                }
+                
+                // Fallback: Try to get from backend user API
+                const response = await fetch('/user-api/currentUser');
+                if (response.ok) {
+                    const userData = await response.json();
+                    return userData.firstname || userData.name || "User";
+                }
+                
+                // Default fallback
+                return "User";
+            } catch (error) {
+                console.log("Could not fetch user info:", error);
+                return "User";
+            }
         }
+
+        // ==================== End Message Management Methods ====================
     })
 });

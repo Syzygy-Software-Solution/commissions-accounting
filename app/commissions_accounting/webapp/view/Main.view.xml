@@ -18,6 +18,22 @@
 					</layoutData>
                 </Button>
                 <ToolbarSpacer/>
+                <Button
+                    id="messageButton"
+                    icon="sap-icon://marketing-campaign"
+                    type="Transparent"
+                    press=".onMessageButtonPress"
+                    visible="true"
+                    tooltip="View Notifications">
+                    <layoutData>
+                        <OverflowToolbarLayoutData priority="High" />
+                    </layoutData>
+                </Button>
+                <Text
+                    id="greetingText"
+                    text="{greeting>/message}"
+                    class="sapUiSmallMarginEnd"
+                    visible="true" />
             </tnt:ToolHeader>
         </tnt:header>
 
