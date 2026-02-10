@@ -79,6 +79,22 @@ modules:
     - npm install
     - npm run build:cf
     supported-platforms: []
+- name: commissions_accounting-ai-service
+  type: python
+  path: ai-service
+  parameters:
+    buildpack: python_buildpack
+    instances: 1
+    memory: 512M
+    disk-quota: 1024M
+  properties:
+    OPENAI_API_KEY: '${OPENAI_API_KEY}'
+  requires:
+  - name: commissions_accounting-auth
+  provides:
+  - name: ai-service-api
+    properties:
+      ai-service-url: ${default-url}
 resources:
 - name: commissions_accounting-auth
   type: org.cloudfoundry.managed-service
@@ -114,6 +130,12 @@ resources:
             ProxyType: Internet
             Type: HTTP
             URL: ~{srv-api/srv-url}
+          - Authentication: NoAuthentication
+            HTML5.DynamicDestination: true
+            Name: ai-service-api
+            ProxyType: Internet
+            Type: HTTP
+            URL: ~{ai-service-api/ai-service-url}
           existing_destinations_policy: update
       version: 1.0.0
     service: destination
@@ -121,6 +143,7 @@ resources:
     service-plan: lite
   requires:
   - name: srv-api
+  - name: ai-service-api
 - name: commissions_accounting_html_repo_host
   type: org.cloudfoundry.managed-service
   parameters:

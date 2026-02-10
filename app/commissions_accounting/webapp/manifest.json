@@ -30,6 +30,10 @@
         "settings": {
           "odataVersion": "4.0"
         }
+      },
+      "aiService": {
+        "uri": "/ai-service-api/api/generate-formula",
+        "type": "JSON"
       }
     },
     "crossNavigation": {

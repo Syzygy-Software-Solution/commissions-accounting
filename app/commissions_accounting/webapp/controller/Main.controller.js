@@ -96,8 +96,22 @@ sap.ui.define([
             });
             this.getView().setModel(oCodeEditorModel, "codeEditor");
 
+            // Formula generator model
+            var oFormulaGeneratorModel = new JSONModel({
+                prompt: "",
+                generatedFormula: "",
+                status: "",
+                testResults: [],
+                testScenario: "",
+                formulaResult: ""
+            });
+            this.getView().setModel(oFormulaGeneratorModel, "formulaGenerator");
+
             // Set dynamic greeting
             this._setGreeting();
+
+            // Load default formula into code editor
+            this._loadDefaultFormula();
 
             // Hardcoded data - commented out, now fetching from database
             // var oDataSourceModel = new JSONModel([
@@ -3895,7 +3909,258 @@ sap.ui.define([
                     }
                 }
             });
+        },
+
+        // ==================== AI Formula Generation Methods ====================
+
+        /**
+         * Load default formula into code editor on initialization
+         */
+        _loadDefaultFormula() {
+            const defaultFormula = `// Current Amortization Formula Logic
+// This is the default calculation used in the system
+
+// For deferred payments:
+// Payment per period = Total Amount / Term
+const deferredPayment = totalAmount / term;
+
+// For non-deferred (immediate) payments:
+// Payment = Total Amount (full amount upfront)
+const immediatePayment = totalAmount;
+
+// With cap percentage:
+// Payment = (Total Amount * (Cap Percent / 100)) / Term
+const cappedPayment = (totalAmount * (capPercent / 100)) / term;
+
+// Variables available for custom formulas:
+// - totalAmount: Total commission amount
+// - capPercent: Cap percentage (0-100)
+// - term: Number of payment periods
+// - amortizationFrequency: 'Monthly', 'Quarterly', 'Annually', 'Biweekly'
+// - payrollClassification: 'W2', '1099', 'International'`;
+
+            const oCodeEditorModel = this.getView().getModel("codeEditor");
+            oCodeEditorModel.setProperty("/code", defaultFormula);
+        },
+
+        /**
+         * Handles Generate Formula button press
+         * Calls AI service to generate formula from natural language prompt
+         */
+        async onGenerateFormulaPress() {
+            const oFormulaModel = this.getView().getModel("formulaGenerator");
+            const sPrompt = oFormulaModel.getProperty("/prompt");
+
+            if (!sPrompt || sPrompt.trim().length === 0) {
+                MessageToast.show("Please enter a description of what you want to calculate");
+                return;
+            }
+
+            // Clear previous results
+            oFormulaModel.setProperty("/generatedFormula", "");
+            oFormulaModel.setProperty("/status", "Generating formula...");
+            oFormulaModel.setProperty("/testResults", []);
+            oFormulaModel.setProperty("/testScenario", "");
+            oFormulaModel.setProperty("/formulaResult", "");
+
+            BusyIndicator.show(0);
+
+            try {
+                // Get AI service URL from manifest or use default
+                const sAiServiceUrl = this._getAiServiceUrl();
+                
+                const response = await fetch(sAiServiceUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        prompt: sPrompt
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || "Failed to generate formula");
+                }
+
+                const data = await response.json();
+
+                if (!data.isValid) {
+                    MessageBox.error(data.explanation || "Generated formula is invalid");
+                    oFormulaModel.setProperty("/status", "❌ Failed");
+                    return;
+                }
+
+                // Set generated formula
+                oFormulaModel.setProperty("/generatedFormula", data.formula);
+                oFormulaModel.setProperty("/status", "✅ Formula generated successfully");
+
+                // Update code editor with generated formula
+                const oCodeEditorModel = this.getView().getModel("codeEditor");
+                oCodeEditorModel.setProperty("/code", `// AI Generated Formula\n// Prompt: ${sPrompt}\n\n${data.formula}`);
+                oCodeEditorModel.setProperty("/language", "javascript");
+
+                MessageToast.show("Formula generated! Click 'Test Formula' to see it in action.");
+
+            } catch (error) {
+                console.error("Error generating formula:", error);
+                MessageBox.error(`Error generating formula: ${error.message}`);
+                oFormulaModel.setProperty("/status", "❌ Error");
+            } finally {
+                BusyIndicator.hide();
+            }
+        },
+
+        /**
+         * Get AI service URL from environment or use default
+         */
+        _getAiServiceUrl() {
+            // Use the destination configured in mta.yaml (ai-service-api)
+            // This maps to the Python AI service running on Cloud Foundry
+            const oManifest = this.getOwnerComponent().getManifestObject();
+            const oDataSources = oManifest.getEntry("/sap.app/dataSources");
+            
+            if (oDataSources && oDataSources.aiService) {
+                // In Cloud Foundry, use destination routing
+                const sBaseUrl = window.location.origin;
+                return sBaseUrl + oDataSources.aiService.uri;
+            }
+            
+            // Fallback for local development
+            return "http://localhost:8080/api/generate-formula";
+        },
+
+        /**
+         * Handles Test Formula button press
+         * Tests the generated formula with predefined sample data
+         */
+        onTestFormulaPress() {
+            const oFormulaModel = this.getView().getModel("formulaGenerator");
+            const sFormula = oFormulaModel.getProperty("/generatedFormula");
+
+            if (!sFormula) {
+                MessageToast.show("No formula to test. Please generate a formula first.");
+                return;
+            }
+
+            try {
+                // Predefined test data
+                const testData = {
+                    totalAmount: 10000,
+                    capPercent: 50,
+                    term: 12,
+                    amortizationFrequency: "Monthly",
+                    payrollClassification: "W2"
+                };
+
+                // Evaluate the formula
+                const result = this._evaluateFormula(sFormula, testData);
+
+                // Build test scenario description
+                const testScenario = `Total Amount: $${testData.totalAmount.toLocaleString()} | Cap: ${testData.capPercent}% | Term: ${testData.term} months | Frequency: ${testData.amortizationFrequency} | Classification: ${testData.payrollClassification}`;
+                
+                oFormulaModel.setProperty("/testScenario", testScenario);
+                oFormulaModel.setProperty("/formulaResult", `$${result.toFixed(2)} per period`);
+
+                // Generate sample amortization schedule
+                const aSchedule = this._generateTestSchedule(result, testData);
+                oFormulaModel.setProperty("/testResults", aSchedule);
+
+                MessageToast.show("Formula tested successfully!");
+
+            } catch (error) {
+                console.error("Error testing formula:", error);
+                MessageBox.error(`Error testing formula: ${error.message}\n\nPlease ensure the formula is valid JavaScript.`);
+            }
+        },
+
+        /**
+         * Safely evaluate formula with given data
+         */
+        _evaluateFormula(sFormula, oData) {
+            // Extract variables from data
+            const totalAmount = oData.totalAmount;
+            const capPercent = oData.capPercent;
+            const term = oData.term;
+            const amortizationFrequency = oData.amortizationFrequency;
+            const payrollClassification = oData.payrollClassification;
+
+            try {
+                // Use Function constructor to evaluate formula in isolated scope
+                // This is safer than eval() but still requires validated input
+                const fn = new Function('totalAmount', 'capPercent', 'term', 'amortizationFrequency', 'payrollClassification', 
+                    `"use strict"; return (${sFormula});`);
+                
+                const result = fn(totalAmount, capPercent, term, amortizationFrequency, payrollClassification);
+
+                if (typeof result !== 'number' || isNaN(result)) {
+                    throw new Error("Formula did not return a valid number");
+                }
+
+                return result;
+            } catch (error) {
+                throw new Error(`Formula evaluation failed: ${error.message}`);
+            }
+        },
+
+        /**
+         * Generate test amortization schedule
+         */
+        _generateTestSchedule(paymentAmount, testData) {
+            const schedule = [];
+            const startDate = new Date();
+            let remainingBalance = testData.totalAmount;
+
+            for (let i = 1; i <= Math.min(testData.term, 6); i++) {
+                const periodDate = new Date(startDate);
+                periodDate.setMonth(periodDate.getMonth() + i);
+
+                const payment = Math.min(paymentAmount, remainingBalance);
+                remainingBalance -= payment;
+
+                schedule.push({
+                    period: i,
+                    date: periodDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+                    payment: `$${payment.toFixed(2)}`,
+                    remaining: `$${Math.max(0, remainingBalance).toFixed(2)}`,
+                    status: remainingBalance > 0 ? "Pending" : "Complete"
+                });
+            }
+
+            // Add ellipsis row if more periods exist
+            if (testData.term > 6) {
+                schedule.push({
+                    period: "...",
+                    date: "...",
+                    payment: "...",
+                    remaining: "...",
+                    status: `${testData.term - 6} more periods`
+                });
+            }
+
+            return schedule;
+        },
+
+        /**
+         * Handles Clear button in formula generator
+         */
+        onClearFormulaGenerator() {
+            const oFormulaModel = this.getView().getModel("formulaGenerator");
+            oFormulaModel.setProperty("/prompt", "");
+            oFormulaModel.setProperty("/generatedFormula", "");
+            oFormulaModel.setProperty("/status", "");
+            oFormulaModel.setProperty("/testResults", []);
+            oFormulaModel.setProperty("/testScenario", "");
+            oFormulaModel.setProperty("/formulaResult", "");
+
+            // Reload default formula
+            this._loadDefaultFormula();
+
+            MessageToast.show("Formula generator cleared");
         }
+
+        // ==================== End AI Formula Generation Methods ====================
 
         // ==================== End Message Management Methods ====================
     })

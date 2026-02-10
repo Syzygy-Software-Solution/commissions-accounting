@@ -520,52 +520,148 @@
                                 </uxap:subSections>
                             </uxap:ObjectPageSection>
 
-                            <uxap:ObjectPageSection title="Amortization Calculation" visible="true" titleUppercase="false">
+                            <uxap:ObjectPageSection title="Amortization Calculation" visible="false" titleUppercase="false">
                                 <uxap:subSections>
                                     <uxap:ObjectPageSubSection>
                                         <VBox class="sapUiSmallMargin">
-                                            <Toolbar>
-                                                <Label text="Programming Language:" class="sapUiTinyMarginEnd"/>
-                                                <Select
-                                                    id="codeEditorLanguageSelector"
-                                                    selectedKey="{codeEditor>/language}"
-                                                    change=".onCodeEditorLanguageChange"
-                                                    width="200px">
-                                                    <items>
-                                                        <core:Item key="javascript" text="JavaScript" />
-                                                        <core:Item key="typescript" text="TypeScript" />
-                                                        <core:Item key="python" text="Python" />
-                                                        <core:Item key="java" text="Java" />
-                                                        <core:Item key="csharp" text="C#" />
-                                                        <core:Item key="sql" text="SQL" />
-                                                        <core:Item key="json" text="JSON" />
-                                                        <core:Item key="xml" text="XML" />
-                                                        <core:Item key="html" text="HTML" />
-                                                        <core:Item key="css" text="CSS" />
-                                                        <core:Item key="php" text="PHP" />
-                                                        <core:Item key="ruby" text="Ruby" />
-                                                        <core:Item key="golang" text="Go" />
-                                                        <core:Item key="yaml" text="YAML" />
-                                                        <core:Item key="markdown" text="Markdown" />
-                                                        <core:Item key="plain_text" text="Plain Text" />
-                                                    </items>
-                                                </Select>
-                                                <ToolbarSpacer />
-                                                <Button
-                                                    text="Clear"
-                                                    icon="sap-icon://delete"
-                                                    type="Ghost"
-                                                    press=".onClearCodeEditor"
-                                                    tooltip="Clear code editor" />
-                                            </Toolbar>
-                                            <codeeditor:CodeEditor
-                                                id="amortizationCodeEditor"
-                                                type="{codeEditor>/language}"
-                                                height="400px"
-                                                width="100%"
-                                                lineNumbers="true"
-                                                value="{codeEditor>/code}"
-                                                syntaxHints="true" />
+                                            <!-- AI Formula Generation Section -->
+                                            <Panel headerText="AI Formula Generator" expandable="true" expanded="true" class="sapUiResponsiveMargin">
+                                                <content>
+                                                    <VBox class="sapUiSmallMargin">
+                                                        <Label text="Describe what you want to calculate:" class="sapUiTinyMarginBottom" />
+                                                        <TextArea
+                                                            id="formulaPromptInput"
+                                                            value="{formulaGenerator>/prompt}"
+                                                            rows="3"
+                                                            width="100%"
+                                                            placeholder="Example: Calculate monthly deferred payment with 50% cap percentage"
+                                                            class="sapUiSmallMarginBottom" />
+                                                        <HBox justifyContent="SpaceBetween" alignItems="Center">
+                                                            <HBox>
+                                                                <Button
+                                                                    text="Generate Formula"
+                                                                    icon="sap-icon://ai"
+                                                                    type="Emphasized"
+                                                                    press=".onGenerateFormulaPress"
+                                                                    enabled="{= ${formulaGenerator>/prompt}.length > 0}"
+                                                                    class="sapUiTinyMarginEnd" />
+                                                                <Button
+                                                                    text="Test Formula"
+                                                                    icon="sap-icon://play"
+                                                                    type="Success"
+                                                                    press=".onTestFormulaPress"
+                                                                    enabled="{= ${formulaGenerator>/generatedFormula}.length > 0}"
+                                                                    class="sapUiTinyMarginEnd" />
+                                                                <Button
+                                                                    text="Clear"
+                                                                    icon="sap-icon://clear-filter"
+                                                                    type="Ghost"
+                                                                    press=".onClearFormulaGenerator" />
+                                                            </HBox>
+                                                            <Text 
+                                                                text="{formulaGenerator>/status}"
+                                                                visible="{= ${formulaGenerator>/status}.length > 0}"
+                                                                class="sapUiSmallMarginEnd" />
+                                                        </HBox>
+                                                    </VBox>
+                                                </content>
+                                            </Panel>
+
+                                            <!-- Code Editor Section -->
+                                            <Panel headerText="Formula Code" class="sapUiResponsiveMargin">
+                                                <content>
+                                                    <VBox>
+                                                        <Toolbar>
+                                                            <Label text="Language:" class="sapUiTinyMarginEnd"/>
+                                                            <Select
+                                                                id="codeEditorLanguageSelector"
+                                                                selectedKey="{codeEditor>/language}"
+                                                                change=".onCodeEditorLanguageChange"
+                                                                width="150px">
+                                                                <items>
+                                                                    <core:Item key="javascript" text="JavaScript" />
+                                                                    <core:Item key="typescript" text="TypeScript" />
+                                                                    <core:Item key="python" text="Python" />
+                                                                    <core:Item key="java" text="Java" />
+                                                                    <core:Item key="csharp" text="C#" />
+                                                                    <core:Item key="sql" text="SQL" />
+                                                                    <core:Item key="json" text="JSON" />
+                                                                    <core:Item key="xml" text="XML" />
+                                                                    <core:Item key="html" text="HTML" />
+                                                                    <core:Item key="css" text="CSS" />
+                                                                    <core:Item key="php" text="PHP" />
+                                                                    <core:Item key="ruby" text="Ruby" />
+                                                                    <core:Item key="golang" text="Go" />
+                                                                    <core:Item key="yaml" text="YAML" />
+                                                                    <core:Item key="markdown" text="Markdown" />
+                                                                    <core:Item key="plain_text" text="Plain Text" />
+                                                                </items>
+                                                            </Select>
+                                                            <ToolbarSpacer />
+                                                        </Toolbar>
+                                                        <codeeditor:CodeEditor
+                                                            id="amortizationCodeEditor"
+                                                            type="{codeEditor>/language}"
+                                                            height="300px"
+                                                            width="100%"
+                                                            lineNumbers="true"
+                                                            value="{codeEditor>/code}"
+                                                            syntaxHints="true"
+                                                            editable="true" />
+                                                    </VBox>
+                                                </content>
+                                            </Panel>
+
+                                            <!-- Test Results Section -->
+                                            <Panel 
+                                                headerText="Test Results" 
+                                                visible="{= ${formulaGenerator>/testResults}.length > 0}"
+                                                class="sapUiResponsiveMargin">
+                                                <content>
+                                                    <VBox class="sapUiSmallMargin">
+                                                        <Label text="Test Scenario:" class="sapUiTinyMarginBottom" design="Bold" />
+                                                        <Text text="{formulaGenerator>/testScenario}" class="sapUiSmallMarginBottom" />
+                                                        
+                                                        <Label text="Formula Result:" class="sapUiTinyMarginBottom" design="Bold" />
+                                                        <Text text="{formulaGenerator>/formulaResult}" class="sapUiSmallMarginBottom" />
+                                                        
+                                                        <Label text="Sample Amortization Schedule:" class="sapUiTinyMarginTop" design="Bold" />
+                                                        <Table
+                                                            id="testResultsTable"
+                                                            items="{formulaGenerator>/testResults}"
+                                                            class="sapUiSmallMarginTop">
+                                                            <columns>
+                                                                <Column width="10%">
+                                                                    <Text text="Period" />
+                                                                </Column>
+                                                                <Column width="15%">
+                                                                    <Text text="Date" />
+                                                                </Column>
+                                                                <Column width="20%">
+                                                                    <Text text="Payment" />
+                                                                </Column>
+                                                                <Column width="25%">
+                                                                    <Text text="Remaining" />
+                                                                </Column>
+                                                                <Column width="30%">
+                                                                    <Text text="Status" />
+                                                                </Column>
+                                                            </columns>
+                                                            <items>
+                                                                <ColumnListItem>
+                                                                    <cells>
+                                                                        <Text text="{formulaGenerator>period}" />
+                                                                        <Text text="{formulaGenerator>date}" />
+                                                                        <Text text="{formulaGenerator>payment}" />
+                                                                        <Text text="{formulaGenerator>remaining}" />
+                                                                        <Text text="{formulaGenerator>status}" />
+                                                                    </cells>
+                                                                </ColumnListItem>
+                                                            </items>
+                                                        </Table>
+                                                    </VBox>
+                                                </content>
+                                            </Panel>
                                         </VBox>
                                     </uxap:ObjectPageSubSection>
                                 </uxap:subSections>
