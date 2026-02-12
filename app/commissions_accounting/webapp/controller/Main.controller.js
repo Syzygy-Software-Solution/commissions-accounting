@@ -2445,32 +2445,52 @@ sap.ui.define([
                                     if (label) {
                                         label += ': ';
                                     }
+                                    // For bar chart (horizontal), value is on x-axis; for column chart, it's on y-axis
+                                    const value = sChartType === "bar" ? context.parsed.x : context.parsed.y;
                                     if (sMeasure === "Amount") {
-                                        label += '$' + context.parsed.y.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                                        label += '$' + value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                                     } else {
-                                        label += context.parsed.y;
+                                        label += value;
                                     }
                                     return label;
                                 }
                             }
                         }
                     },
-                    scales: chartType === "pie" || chartType === "doughnut" ? {} : {
-                        x: {
-                            beginAtZero: true
-                        },
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                callback: function(value) {
-                                    if (sMeasure === "Amount") {
-                                        return '$' + value.toLocaleString();
+                    scales: chartType === "pie" || chartType === "doughnut" ? {} : 
+                        sChartType === "bar" ? {
+                            // For horizontal bar chart: measure on x-axis, dimension on y-axis
+                            x: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: function(value) {
+                                        if (sMeasure === "Amount") {
+                                            return '$' + value.toLocaleString();
+                                        }
+                                        return value;
                                     }
-                                    return value;
+                                }
+                            },
+                            y: {
+                                beginAtZero: true
+                            }
+                        } : {
+                            // For vertical column chart: dimension on x-axis, measure on y-axis
+                            x: {
+                                beginAtZero: true
+                            },
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: function(value) {
+                                        if (sMeasure === "Amount") {
+                                            return '$' + value.toLocaleString();
+                                        }
+                                        return value;
+                                    }
                                 }
                             }
                         }
-                    }
                 }
             };
 

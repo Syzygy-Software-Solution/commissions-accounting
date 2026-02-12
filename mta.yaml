@@ -87,8 +87,8 @@ modules:
     instances: 1
     memory: 512M
     disk-quota: 1024M
-  properties:
-    OPENAI_API_KEY: '${OPENAI_API_KEY}'
+  # properties:
+  #   OPENAI_API_KEY: '${OPENAI_API_KEY}'
   requires:
   - name: commissions_accounting-auth
   provides:
