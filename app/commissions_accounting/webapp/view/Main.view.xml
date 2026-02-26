@@ -410,7 +410,9 @@
                                                     <items>
                                                         <SegmentedButtonItem key="column" icon="sap-icon://horizontal-bar-chart" tooltip="Column Chart" />
                                                         <SegmentedButtonItem key="bar" icon="sap-icon://horizontal-bar-chart-2" tooltip="Bar Chart" />
+                                                        <SegmentedButtonItem key="stacked" icon="sap-icon://vertical-stacked-chart" tooltip="Stacked Column Chart" />
                                                         <SegmentedButtonItem key="line" icon="sap-icon://line-chart" tooltip="Line Chart" />
+                                                        <SegmentedButtonItem key="area" icon="sap-icon://area-chart" tooltip="Area Chart" />
                                                         <SegmentedButtonItem key="pie" icon="sap-icon://pie-chart" tooltip="Pie Chart" />
                                                         <SegmentedButtonItem key="donut" icon="sap-icon://donut-chart" tooltip="Donut Chart" />
                                                     </items>
@@ -438,6 +440,23 @@
                                                     <items>
                                                         <core:Item key="Amount" text="Amount" />
                                                         <core:Item key="RecordCount" text="No. of payments" />
+                                                    </items>
+                                                </Select>
+                                                <Label 
+                                                    text="Stack By:" 
+                                                    class="sapUiTinyMarginBegin sapUiTinyMarginEnd"
+                                                    visible="{= ${chartConfig>/chartType} === 'stacked' }" />
+                                                <Select
+                                                    id="chartStackBySelector"
+                                                    selectedKey="{chartConfig>/stackBy}"
+                                                    change=".onChartStackByChange"
+                                                    width="180px"
+                                                    visible="{= ${chartConfig>/chartType} === 'stacked' }">
+                                                    <items>
+                                                        <core:Item key="Product" text="Product" />
+                                                        <core:Item key="PayrollClassification" text="Payroll Classification" />
+                                                        <core:Item key="PayeeId" text="Payee ID" />
+                                                        <core:Item key="OrderId" text="Order ID" />
                                                     </items>
                                                 </Select>
                                                 <Label text="Top:" class="sapUiTinyMarginBegin sapUiTinyMarginEnd"/>

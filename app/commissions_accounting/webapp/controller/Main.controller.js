@@ -72,7 +72,8 @@ sap.ui.define([
                 chartType: "column",
                 dimension: "PayeeId",
                 measure: "Amount",
-                topN: "10"
+                topN: "10",
+                stackBy: "Product"
             });
             this.getView().setModel(oChartConfigModel, "chartConfig");
 
@@ -2271,9 +2272,22 @@ sap.ui.define([
             const sDimension = oChartConfigModel.getProperty("/dimension");
             const sMeasure = oChartConfigModel.getProperty("/measure");
             const sTopN = oChartConfigModel.getProperty("/topN");
+            const sStackBy = oChartConfigModel.getProperty("/stackBy");
 
-            console.log("Chart config:", { sChartType, sDimension, sMeasure, sTopN });
+            console.log("Chart config:", { sChartType, sDimension, sMeasure, sTopN, sStackBy });
 
+            // Handle different chart types
+            if (sChartType === "stacked") {
+                this._updateStackedChartData(aScheduleData, sDimension, sMeasure, sTopN, sStackBy);
+            } else {
+                this._updateRegularChartData(aScheduleData, sChartType, sDimension, sMeasure, sTopN);
+            }
+        },
+
+        /**
+         * Updates chart data for regular charts (column, bar, line, pie, donut)
+         */
+        _updateRegularChartData(aScheduleData, sChartType, sDimension, sMeasure, sTopN) {
             // Group data by the selected dimension
             const oGroupedData = {};
             
@@ -2354,6 +2368,114 @@ sap.ui.define([
         },
 
         /**
+         * Updates chart data for stacked column charts
+         */
+        _updateStackedChartData(aScheduleData, sDimension, sMeasure, sTopN, sStackBy) {
+            // Group data by primary dimension and stack dimension
+            const oGroupedData = {};
+            const aStackCategories = new Set();
+            
+            aScheduleData.forEach(item => {
+                let dimensionValue, stackValue;
+                
+                // Get dimension value
+                switch (sDimension) {
+                    case "PayeeId":
+                        dimensionValue = item.PayeeId || "Unknown";
+                        break;
+                    case "Product":
+                        dimensionValue = item.Product || "Unknown";
+                        break;
+                    case "PayrollClassification":
+                        dimensionValue = item["Payroll Classification"] || "Unknown";
+                        break;
+                    case "OrderId":
+                        dimensionValue = item.OrderId || "Unknown";
+                        break;
+                    default:
+                        dimensionValue = item.PayeeId || "Unknown";
+                }
+                
+                // Get stack dimension value
+                switch (sStackBy) {
+                    case "Product":
+                        stackValue = item.Product || "Unknown";
+                        break;
+                    case "PayrollClassification":
+                        stackValue = item["Payroll Classification"] || "Unknown";
+                        break;
+                    case "PayeeId":
+                        stackValue = item.PayeeId || "Unknown";
+                        break;
+                    case "OrderId":
+                        stackValue = item.OrderId || "Unknown";
+                        break;
+                    default:
+                        stackValue = item.Product || "Unknown";
+                }
+                
+                aStackCategories.add(stackValue);
+                
+                if (!oGroupedData[dimensionValue]) {
+                    oGroupedData[dimensionValue] = {
+                        dimension: String(dimensionValue),
+                        stacks: {},
+                        totalValue: 0
+                    };
+                }
+                
+                if (!oGroupedData[dimensionValue].stacks[stackValue]) {
+                    oGroupedData[dimensionValue].stacks[stackValue] = {
+                        totalAmount: 0,
+                        recordCount: 0
+                    };
+                }
+                
+                // Parse amount
+                const sAmount = item["Total Incentive"] || "0";
+                const nAmount = parseFloat(String(sAmount).replace(/[$,]/g, "")) || 0;
+                
+                oGroupedData[dimensionValue].stacks[stackValue].totalAmount += nAmount;
+                oGroupedData[dimensionValue].stacks[stackValue].recordCount++;
+                
+                // Calculate total for sorting
+                if (sMeasure === "Amount") {
+                    oGroupedData[dimensionValue].totalValue += nAmount;
+                } else {
+                    oGroupedData[dimensionValue].totalValue++;
+                }
+            });
+
+            // Convert to array and sort
+            let aDimensions = Object.keys(oGroupedData);
+            aDimensions.sort((a, b) => oGroupedData[b].totalValue - oGroupedData[a].totalValue);
+
+            // Apply Top N filter
+            if (sTopN !== "all") {
+                const nTopN = parseInt(sTopN);
+                aDimensions = aDimensions.slice(0, nTopN);
+            }
+
+            // Prepare stacked chart data
+            const aChartData = {
+                labels: aDimensions,
+                datasets: [],
+                stackCategories: Array.from(aStackCategories)
+            };
+
+            console.log("Stacked chart data prepared:", aChartData);
+
+            // Update chart data model
+            const oChartDataModel = this.getView().getModel("chartData");
+            oChartDataModel.setData([aChartData]); // Keep as array for consistency
+            
+            // Render chart
+            setTimeout(() => {
+                this._renderStackedChart(aChartData, sDimension, sMeasure, sStackBy, oGroupedData);
+            }, 100);
+        },
+
+        /**
          * Destroys existing Chart.js instance
          */
         _destroyChart() {
@@ -2400,6 +2522,8 @@ sap.ui.define([
                 chartType = "bar";
             } else if (sChartType === "donut") {
                 chartType = "doughnut";
+            } else if (sChartType === "area") {
+                chartType = "line"; // Area chart is a line chart with fill
             }
 
             // Generate colors for the chart
@@ -2413,9 +2537,15 @@ sap.ui.define([
                     datasets: [{
                         label: sMeasure === "Amount" ? "Amount ($)" : "No. of payments",
                         data: values,
-                        backgroundColor: chartType === "pie" || chartType === "doughnut" ? colors : colors[0],
-                        borderColor: chartType === "pie" || chartType === "doughnut" ? colors : colors[0],
-                        borderWidth: 1
+                        backgroundColor: sChartType === "area" 
+                            ? 'rgba(54, 162, 235, 0.4)' // Semi-transparent for area fill
+                            : (chartType === "pie" || chartType === "doughnut" ? colors : colors[0]),
+                        borderColor: sChartType === "area"
+                            ? 'rgba(54, 162, 235, 1)' // Solid color for area border
+                            : (chartType === "pie" || chartType === "doughnut" ? colors : colors[0]),
+                        borderWidth: sChartType === "area" ? 2 : 1,
+                        fill: sChartType === "area" ? true : false, // Enable area fill for area chart
+                        tension: sChartType === "area" ? 0.4 : 0 // Smooth curves for area chart
                     }]
                 },
                 options: {
@@ -2529,6 +2659,110 @@ sap.ui.define([
             return colors;
         },
 
+        /**
+         * Renders stacked column chart using Chart.js
+         */
+        _renderStackedChart(aChartData, sDimension, sMeasure, sStackBy, oGroupedData) {
+            if (!window.Chart) {
+                console.error("Chart.js library not loaded");
+                MessageToast.show("Chart library is loading. Please try again in a moment.");
+                return;
+            }
+
+            const oCanvas = document.getElementById('summaryChart');
+            if (!oCanvas) {
+                console.error("Canvas element not found");
+                return;
+            }
+
+            this._destroyChart();
+
+            // Generate colors for each stack category
+            const colors = this._generateChartColors(aChartData.stackCategories.length);
+            
+            // Create datasets for each stack category
+            const datasets = aChartData.stackCategories.map((stackCategory, index) => {
+                const data = aChartData.labels.map(label => {
+                    const groupData = oGroupedData[label];
+                    if (groupData && groupData.stacks[stackCategory]) {
+                        if (sMeasure === "Amount") {
+                            return groupData.stacks[stackCategory].totalAmount;
+                        } else {
+                            return groupData.stacks[stackCategory].recordCount;
+                        }
+                    }
+                    return 0;
+                });
+
+                return {
+                    label: stackCategory,
+                    data: data,
+                    backgroundColor: colors[index],
+                    borderColor: colors[index].replace('0.8', '1'),
+                    borderWidth: 1
+                };
+            });
+
+            const config = {
+                type: 'bar',
+                data: {
+                    labels: aChartData.labels,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        },
+                        title: {
+                            display: true,
+                            text: `${sMeasure} by ${sDimension} (Stacked by ${sStackBy})`
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (sMeasure === "Amount") {
+                                        label += '$' + context.parsed.y.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                                    } else {
+                                        label += context.parsed.y;
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            stacked: true,
+                            beginAtZero: true
+                        },
+                        y: {
+                            stacked: true,
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    if (sMeasure === "Amount") {
+                                        return '$' + value.toLocaleString();
+                                    }
+                                    return value;
+                                }
+                            }
+                        }
+                    }
+                }
+            };
+
+            this._chartInstance = new Chart(oCanvas, config);
+            console.log("Stacked chart rendered successfully");
+        },
+
         onChartTypeChange(oEvent) {
             const sSelectedKey = oEvent.getParameter("item").getKey();
             const oChartConfigModel = this.getView().getModel("chartConfig");
@@ -2560,6 +2794,15 @@ sap.ui.define([
             const sSelectedKey = oEvent.getParameter("selectedItem").getKey();
             const oChartConfigModel = this.getView().getModel("chartConfig");
             oChartConfigModel.setProperty("/topN", sSelectedKey);
+            
+            // Refresh chart data
+            this._updateChartData();
+        },
+
+        onChartStackByChange(oEvent) {
+            const sSelectedKey = oEvent.getParameter("selectedItem").getKey();
+            const oChartConfigModel = this.getView().getModel("chartConfig");
+            oChartConfigModel.setProperty("/stackBy", sSelectedKey);
             
             // Refresh chart data
             this._updateChartData();
