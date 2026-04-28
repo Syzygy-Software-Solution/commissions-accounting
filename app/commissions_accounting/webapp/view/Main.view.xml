@@ -108,6 +108,15 @@
                                                     <core:Item key="{id}" text="{id}" />
                                                 </MultiComboBox>
                                                 <MultiComboBox
+                                                    id="scheduleOrderIdFilter"
+                                                    width="200px"
+                                                    items="{/scheduleOrderIds}"
+                                                    selectionChange=".onScheduleOrderIdFilterChange"
+                                                    placeholder="Order ID"
+                                                    class="sapUiTinyMarginBegin">
+                                                    <core:Item key="{id}" text="{id}" />
+                                                </MultiComboBox>
+                                                <MultiComboBox
                                                     id="scheduleProductFilter"
                                                     width="200px"
                                                     items="{/scheduleProducts}"
@@ -146,6 +155,7 @@
                                                     <Column><Text text="Customer" /></Column>
                                                     <Column><Text text="Product" /></Column>
                                                     <Column><Text text="Amount" /></Column>
+                                                    <Column><Text text="Adjustment" /></Column>
                                                     <Column><Text text="Cap %" /></Column>
                                                     <Column><Text text="Term" /></Column>
                                                     <Column><Text text="Amortization Frequency" /></Column>
@@ -167,6 +177,13 @@
                                                             <Text text="{scheduleData>Customer}" />
                                                             <Text text="{scheduleData>Product}" />
                                                             <Text text="{scheduleData>Total Incentive}" />
+                                                            <Input
+                                                                value="{scheduleData>Adjustment}"
+                                                                type="Number"
+                                                                placeholder="0.00"
+                                                                width="80px"
+                                                                submit=".onAdjustmentSubmit"
+                                                                enabled="{= ${scheduleData>Payroll Classification} !== 'Non-Deferred'}" />
                                                             <Text text="{scheduleData>Cap %}" />
                                                             <Text text="{scheduleData>Term}" />
                                                             <Text text="{scheduleData>Payment Frequency}" />
@@ -214,6 +231,15 @@
                                                     items="{/overviewPayeeIds}"
                                                     selectionChange=".onOverviewPayeeFilterChange"
                                                     placeholder="Payee ID">
+                                                    <core:Item key="{id}" text="{id}" />
+                                                </MultiComboBox>
+                                                <MultiComboBox
+                                                    id="overviewOrderIdFilter"
+                                                    width="200px"
+                                                    items="{/overviewOrderIds}"
+                                                    selectionChange=".onOverviewOrderIdFilterChange"
+                                                    placeholder="Order ID"
+                                                    class="sapUiTinyMarginBegin">
                                                     <core:Item key="{id}" text="{id}" />
                                                 </MultiComboBox>
                                                 <MultiComboBox

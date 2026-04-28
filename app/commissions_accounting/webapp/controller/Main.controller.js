@@ -1253,6 +1253,10 @@ sap.ui.define([
                 const aPayeeIdOptions = aDistinctPayeeIds.map(id => ({ id: id }));
                 oModel.setProperty("/schedulePayeeIds", aPayeeIdOptions);
 
+                const aDistinctOrderIds = [...new Set(aSchedule.map(item => item.OrderId))].filter(Boolean);
+                const aOrderIdOptions = aDistinctOrderIds.map(id => ({ id: id }));
+                oModel.setProperty("/scheduleOrderIds", aOrderIdOptions);
+
                 const aDistinctProducts = [...new Set(aSchedule.map(item => item.Product))].filter(Boolean);
                 const aProductOptions = aDistinctProducts.map(id => ({ id: id }));
                 oModel.setProperty("/scheduleProducts", aProductOptions);
@@ -1265,6 +1269,10 @@ sap.ui.define([
                 const aOverviewDistinctPayeeIds = [...new Set(aOverview.map(item => item.PayeeId))].filter(Boolean);
                 const aOverviewPayeeIdOptions = aOverviewDistinctPayeeIds.map(id => ({ id: id }));
                 oModel.setProperty("/overviewPayeeIds", aOverviewPayeeIdOptions);
+
+                const aOverviewDistinctOrderIds = [...new Set(aOverview.map(item => item.OrderId))].filter(Boolean);
+                const aOverviewOrderIdOptions = aOverviewDistinctOrderIds.map(id => ({ id: id }));
+                oModel.setProperty("/overviewOrderIds", aOverviewOrderIdOptions);
 
                 const aOverviewDistinctProducts = [...new Set(aOverview.map(item => item.Product))].filter(Boolean);
                 const aOverviewProductOptions = aOverviewDistinctProducts.map(id => ({ id: id }));
@@ -1279,6 +1287,10 @@ sap.ui.define([
                 if (oPayeeFilter) {
                     oPayeeFilter.setSelectedKeys([]);
                 }
+                const oOrderIdFilter = this.byId("scheduleOrderIdFilter");
+                if (oOrderIdFilter) {
+                    oOrderIdFilter.setSelectedKeys([]);
+                }
                 const oProductFilter = this.byId("scheduleProductFilter");
                 if (oProductFilter) {
                     oProductFilter.setSelectedKeys([]);
@@ -1292,6 +1304,10 @@ sap.ui.define([
                 const oOverviewPayeeFilter = this.byId("overviewPayeeFilter");
                 if (oOverviewPayeeFilter) {
                     oOverviewPayeeFilter.setSelectedKeys([]);
+                }
+                const oOverviewOrderIdFilter = this.byId("overviewOrderIdFilter");
+                if (oOverviewOrderIdFilter) {
+                    oOverviewOrderIdFilter.setSelectedKeys([]);
                 }
                 const oOverviewProductFilter = this.byId("overviewProductFilter");
                 if (oOverviewProductFilter) {
@@ -1612,6 +1628,10 @@ sap.ui.define([
                 const aPayeeIdOptions = aDistinctPayeeIds.map(id => ({ id: id }));
                 oModel.setProperty("/schedulePayeeIds", aPayeeIdOptions);
 
+                const aDistinctOrderIds = [...new Set(aSchedule.map(item => item.OrderId))].filter(Boolean);
+                const aOrderIdOptions = aDistinctOrderIds.map(id => ({ id: id }));
+                oModel.setProperty("/scheduleOrderIds", aOrderIdOptions);
+
                 const aDistinctProducts = [...new Set(aSchedule.map(item => item.Product))].filter(Boolean);
                 const aProductOptions = aDistinctProducts.map(id => ({ id: id }));
                 oModel.setProperty("/scheduleProducts", aProductOptions);
@@ -1624,6 +1644,10 @@ sap.ui.define([
                 const aOverviewDistinctPayeeIds = [...new Set(aOverview.map(item => item.PayeeId))].filter(Boolean);
                 const aOverviewPayeeIdOptions = aOverviewDistinctPayeeIds.map(id => ({ id: id }));
                 oModel.setProperty("/overviewPayeeIds", aOverviewPayeeIdOptions);
+
+                const aOverviewDistinctOrderIds = [...new Set(aOverview.map(item => item.OrderId))].filter(Boolean);
+                const aOverviewOrderIdOptions = aOverviewDistinctOrderIds.map(id => ({ id: id }));
+                oModel.setProperty("/overviewOrderIds", aOverviewOrderIdOptions);
 
                 const aOverviewDistinctProducts = [...new Set(aOverview.map(item => item.Product))].filter(Boolean);
                 const aOverviewProductOptions = aOverviewDistinctProducts.map(id => ({ id: id }));
@@ -1638,6 +1662,10 @@ sap.ui.define([
                 if (oPayeeFilter) {
                     oPayeeFilter.setSelectedKeys([]);
                 }
+                const oOrderIdFilter = this.byId("scheduleOrderIdFilter");
+                if (oOrderIdFilter) {
+                    oOrderIdFilter.setSelectedKeys([]);
+                }
                 const oProductFilter = this.byId("scheduleProductFilter");
                 if (oProductFilter) {
                     oProductFilter.setSelectedKeys([]);
@@ -1651,6 +1679,10 @@ sap.ui.define([
                 const oOverviewPayeeFilter = this.byId("overviewPayeeFilter");
                 if (oOverviewPayeeFilter) {
                     oOverviewPayeeFilter.setSelectedKeys([]);
+                }
+                const oOverviewOrderIdFilter = this.byId("overviewOrderIdFilter");
+                if (oOverviewOrderIdFilter) {
+                    oOverviewOrderIdFilter.setSelectedKeys([]);
                 }
                 const oOverviewProductFilter = this.byId("overviewProductFilter");
                 if (oOverviewProductFilter) {
@@ -1886,12 +1918,127 @@ sap.ui.define([
             this._applyScheduleFilters();
         },
 
+        onScheduleOrderIdFilterChange(oEvent) {
+            this._applyScheduleFilters();
+        },
+
         onScheduleProductFilterChange(oEvent) {
             this._applyScheduleFilters();
         },
 
         onSchedulePayrollClassificationFilterChange(oEvent) {
             this._applyScheduleFilters();
+        },
+
+        onAdjustmentSubmit(oEvent) {
+            const oInput = oEvent.getSource();
+            const oBindingContext = oInput.getBindingContext("scheduleData");
+            const sPath = oBindingContext.getPath();
+            const oScheduleModel = this.getView().getModel("scheduleData");
+            const aSchedule = oScheduleModel.getData();
+            const iCurrentIndex = parseInt(sPath.replace("/", ""), 10);
+            const oCurrentRow = aSchedule[iCurrentIndex];
+
+            const fAdjustment = parseFloat(oInput.getValue());
+            if (isNaN(fAdjustment) || fAdjustment === 0) {
+                oInput.setValue("");
+                return;
+            }
+
+            // Get the term and current payment amount for this row
+            const iTerm = parseInt(oCurrentRow.Term) || 0;
+            if (iTerm === 0) {
+                MessageBox.warning("Cannot apply adjustment: Term is zero for this record.");
+                oInput.setValue("");
+                return;
+            }
+
+            // Parse the current amortization amount (remove currency formatting)
+            const fCurrentAmount = parseFloat(String(oCurrentRow["Total Incentive"]).replace(/[^0-9.-]/g, "")) || 0;
+
+            // Validate: adjustment must not exceed the amortization amount
+            if (Math.abs(fAdjustment) > Math.abs(fCurrentAmount)) {
+                MessageBox.warning("Adjustment amount cannot exceed the amortization amount (" + oCurrentRow["Total Incentive"] + ").");
+                oInput.setValue("");
+                return;
+            }
+
+            // Calculate total adjustment: adjustment * term
+            const fTotalAdjustment = fAdjustment * iTerm;
+
+            // Find all installments for the same PayeeId + Product group
+            const sPayeeId = oCurrentRow.PayeeId;
+            const sProduct = oCurrentRow.Product;
+            const sOrderId = oCurrentRow.OrderId;
+
+            // Get the installment number of the current row
+            const sCurrentNotes = oCurrentRow.Notes || "";
+            const iCurrentInstallment = parseInt((sCurrentNotes.match(/Installment (\d+)/) || [])[1]) || 0;
+
+            // Find all rows in the same group and identify subsequent installments
+            let bFoundCurrent = false;
+            let bWouldGoNegative = false;
+            const aAffectedIndices = [];
+
+            for (let i = 0; i < aSchedule.length; i++) {
+                const oRow = aSchedule[i];
+                if (oRow.PayeeId === sPayeeId && oRow.Product === sProduct && oRow.OrderId === sOrderId) {
+                    const sNotes = oRow.Notes || "";
+                    const iInstallment = parseInt((sNotes.match(/Installment (\d+)/) || [])[1]) || 0;
+
+                    if (i === iCurrentIndex) {
+                        bFoundCurrent = true;
+                        continue;
+                    }
+
+                    // Only affect rows after the current one in the same group
+                    if (bFoundCurrent && iInstallment > iCurrentInstallment) {
+                        const fRowAmount = parseFloat(String(oRow["Total Incentive"]).replace(/[^0-9.-]/g, "")) || 0;
+                        if (fRowAmount - fTotalAdjustment < 0) {
+                            bWouldGoNegative = true;
+                        }
+                        aAffectedIndices.push(i);
+                    }
+                }
+            }
+
+            if (aAffectedIndices.length === 0) {
+                MessageBox.information("No subsequent installments found to adjust. Adjustment can only be applied when there are future installments.");
+                oInput.setValue("");
+                return;
+            }
+
+            if (bWouldGoNegative) {
+                MessageBox.warning(
+                    "The total adjustment (" + this._formatCurrency(fTotalAdjustment) +
+                    " = " + this._formatCurrency(fAdjustment) + " x " + iTerm +
+                    ") would reduce one or more subsequent amortization amounts below zero. Please enter a smaller adjustment value."
+                );
+                oInput.setValue("");
+                return;
+            }
+
+            // Apply the adjustment to subsequent installments
+            aAffectedIndices.forEach(idx => {
+                const oRow = aSchedule[idx];
+                const fRowAmount = parseFloat(String(oRow["Total Incentive"]).replace(/[^0-9.-]/g, "")) || 0;
+                oRow["Total Incentive"] = this._formatCurrency(fRowAmount - fTotalAdjustment);
+            });
+
+            oScheduleModel.setData(aSchedule);
+            oScheduleModel.refresh(true);
+
+            // Also update the original data if stored (for filter consistency)
+            const oModel = this.getView().getModel();
+            if (oModel.getProperty("/scheduleOriginal")) {
+                oModel.setProperty("/scheduleOriginal", [...aSchedule]);
+            }
+
+            MessageToast.show(
+                "Adjustment applied: " + this._formatCurrency(fTotalAdjustment) +
+                " (" + this._formatCurrency(fAdjustment) + " x " + iTerm +
+                ") deducted from " + aAffectedIndices.length + " subsequent installment(s)"
+            );
         },
 
         _applyScheduleFilters() {
@@ -1908,15 +2055,18 @@ sap.ui.define([
             
             // Get selected filter values
             const oPayeeFilter = this.byId("schedulePayeeFilter");
+            const oOrderIdFilter = this.byId("scheduleOrderIdFilter");
             const oProductFilter = this.byId("scheduleProductFilter");
             const oPayrollClassificationFilter = this.byId("schedulePayrollClassificationFilter");
             
             const aSelectedPayeeIds = oPayeeFilter ? oPayeeFilter.getSelectedKeys() : [];
+            const aSelectedOrderIds = oOrderIdFilter ? oOrderIdFilter.getSelectedKeys() : [];
             const aSelectedProducts = oProductFilter ? oProductFilter.getSelectedKeys() : [];
             const aSelectedPayrollClassifications = oPayrollClassificationFilter ? oPayrollClassificationFilter.getSelectedKeys() : [];
             
             // Check if any filter is active
             const bHasActiveFilters = (aSelectedPayeeIds && aSelectedPayeeIds.length > 0) ||
+                                      (aSelectedOrderIds && aSelectedOrderIds.length > 0) ||
                                       (aSelectedProducts && aSelectedProducts.length > 0) ||
                                       (aSelectedPayrollClassifications && aSelectedPayrollClassifications.length > 0);
             
@@ -1933,6 +2083,13 @@ sap.ui.define([
                 if (aSelectedPayeeIds && aSelectedPayeeIds.length > 0) {
                     aFilteredSchedule = aFilteredSchedule.filter(item => 
                         aSelectedPayeeIds.includes(item.PayeeId)
+                    );
+                }
+                
+                // Filter by Order ID if selected
+                if (aSelectedOrderIds && aSelectedOrderIds.length > 0) {
+                    aFilteredSchedule = aFilteredSchedule.filter(item => 
+                        aSelectedOrderIds.includes(item.OrderId)
                     );
                 }
                 
@@ -1958,6 +2115,9 @@ sap.ui.define([
                 if (aSelectedPayeeIds && aSelectedPayeeIds.length > 0) {
                     aFilterParts.push(`Payee: ${aSelectedPayeeIds.join(", ")}`);
                 }
+                if (aSelectedOrderIds && aSelectedOrderIds.length > 0) {
+                    aFilterParts.push(`Order: ${aSelectedOrderIds.join(", ")}`);
+                }
                 if (aSelectedProducts && aSelectedProducts.length > 0) {
                     aFilterParts.push(`Product: ${aSelectedProducts.join(", ")}`);
                 }
@@ -1969,6 +2129,10 @@ sap.ui.define([
         },
 
         onOverviewPayeeFilterChange(oEvent) {
+            this._applyOverviewFilters();
+        },
+
+        onOverviewOrderIdFilterChange(oEvent) {
             this._applyOverviewFilters();
         },
 
@@ -1994,15 +2158,18 @@ sap.ui.define([
             
             // Get selected filter values
             const oPayeeFilter = this.byId("overviewPayeeFilter");
+            const oOrderIdFilter = this.byId("overviewOrderIdFilter");
             const oProductFilter = this.byId("overviewProductFilter");
             const oPayrollClassificationFilter = this.byId("overviewPayrollClassificationFilter");
             
             const aSelectedPayeeIds = oPayeeFilter ? oPayeeFilter.getSelectedKeys() : [];
+            const aSelectedOrderIds = oOrderIdFilter ? oOrderIdFilter.getSelectedKeys() : [];
             const aSelectedProducts = oProductFilter ? oProductFilter.getSelectedKeys() : [];
             const aSelectedPayrollClassifications = oPayrollClassificationFilter ? oPayrollClassificationFilter.getSelectedKeys() : [];
             
             // Check if any filter is active
             const bHasActiveFilters = (aSelectedPayeeIds && aSelectedPayeeIds.length > 0) ||
+                                      (aSelectedOrderIds && aSelectedOrderIds.length > 0) ||
                                       (aSelectedProducts && aSelectedProducts.length > 0) ||
                                       (aSelectedPayrollClassifications && aSelectedPayrollClassifications.length > 0);
             
@@ -2017,6 +2184,13 @@ sap.ui.define([
                 if (aSelectedPayeeIds && aSelectedPayeeIds.length > 0) {
                     aFilteredOverview = aFilteredOverview.filter(item => 
                         aSelectedPayeeIds.includes(item.PayeeId)
+                    );
+                }
+                
+                // Filter by Order ID if selected
+                if (aSelectedOrderIds && aSelectedOrderIds.length > 0) {
+                    aFilteredOverview = aFilteredOverview.filter(item => 
+                        aSelectedOrderIds.includes(item.OrderId)
                     );
                 }
                 
